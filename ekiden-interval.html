@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>三大駅伝 区間別ランキング | 青山学院大学 陸上競技部</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<header data-site-header></header>
+
+<main>
+  <div class="breadcrumb"><a href="index.html">概況</a> / 三大駅伝 区間別</div>
+  <section class="page-head">
+    <h1>三大駅伝 区間別ランキング</h1>
+    <p>箱根・全日本・出雲の全区間を、歴代の青学選手の記録で並べたランキング。区間距離は大会の改道で変わるため、距離ごとに別のランキングに分けています。</p>
+  </section>
+
+  <section class="controls">
+    <div class="field">
+      <label>大会</label>
+      <div class="pill-row" id="relayTabs"></div>
+    </div>
+    <div class="field">
+      <label>並び順</label>
+      <select id="sortBy">
+        <option value="time">記録（速い順）</option>
+        <option value="pace">ペース（速い順）</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>距離</label>
+      <select id="distFilter"><option value="">すべて</option></select>
+    </div>
+    <div class="field">
+      <label>表示</label>
+      <select id="scope">
+        <option value="all">歴代全員</option>
+        <option value="active">現役のみ</option>
+      </select>
+    </div>
+    <div class="field" style="margin-left:auto;align-self:flex-end">
+      <label style="visibility:hidden">·</label>
+      <span class="hint" id="seasonBadge" style="font-size:12px"></span>
+    </div>
+  </section>
+
+  <section class="card" style="margin-bottom:14px;padding:12px 16px">
+    <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--muted)">
+      <span class="hint">🟩 <b style="color:var(--ink)">緑の行</b>＝今季（<span id="seasonLabel">—</span>）の記録</span>
+      <span class="hint">ペース = 区間記録 ÷ 距離（1kmあたり・小数第1位まで）</span>
+      <span class="hint">※ 全日本は第50回（2018年）からコースが変わり、区間の距離が大きく変わりました</span>
+      <span class="hint">※ 箱根は第93回（2017年）から4区・5区の距離が変わりました</span>
+      <span class="hint">※ 区間距離の出典：蒼樹亭「駅伝区間別記録」</span>
+      <span class="hint">※ 出雲は第38回（2026年）から開始が午後→9:10に変更（区間記録・順位は参考値）</span>
+    </div>
+  </section>
+
+  <div id="out"></div>
+</main>
+
+<footer data-site-footer></footer>
+
+<script type="module">
+import { loadStore, formatScore, currentSeason, scoreText } from "./assets/store.js";
+import { mountLayout, setGeneratedAt, renderTable, fmtDate, gradeLabel, esc, qs } from "./assets/ui.js";
+import { t } from "./assets/i18n.js";
+
+const store = await loadStore();
+mountLayout("ekiden-interval.html");
+setGeneratedAt(store.generatedAt);
+
+const season = currentSeason();
+document.getElementById("seasonLabel").textContent = season.label;
+
+/**
+ * 三大驿传。base = 第1回的西暦（第N回 = base + N 年）。
+ * eras = 改道以后各区间用的距离。只在「距离变过」的区间登记，
+ * 没登记的区间就按成绩里带的距离自动分组。
+ * 数值来自苍树亭的区間別記録（全日本=50回以降/出雲=26回以降/箱根=93回以降）。
+ */
+const RELAYS = [
+  {
+    key: "箱根駅伝", match: /箱根駅伝/, base: 1924,
+    eras: {
+      1: [{ from: 55, km: 21.3 }],
+      2: [{ from: 59, km: 23.1 }],
+      3: [{ from: 55, km: 21.4 }],
+      4: [{ to: 92, km: 18.5 }, { from: 93, km: 20.9 }],
+      5: [{ to: 92, km: 23.2 }, { from: 93, km: 20.8 }],
+      6: [{ km: 20.8 }],
+      7: [{ from: 62, km: 21.3 }],
+      8: [{ from: 55, km: 21.4 }],
+      9: [{ from: 59, km: 23.1 }],
+      10: [{ from: 75, km: 23.0 }],
+    },
+  },
+  {
+    key: "全日本大学駅伝", match: /全日本大学駅伝/, base: 1968,
+    eras: {
+      1: [{ to: 49, km: 14.6 }, { from: 50, km: 9.5 }],
+      2: [{ to: 49, km: 13.2 }, { from: 50, km: 11.1 }],
+      3: [{ to: 49, km: 9.5 }, { from: 50, km: 11.9 }],
+      4: [{ to: 49, km: 14.0 }, { from: 50, km: 11.8 }],
+      5: [{ to: 49, km: 11.6 }, { from: 50, km: 12.4 }],
+      6: [{ to: 49, km: 12.3 }, { from: 50, km: 12.8 }],
+      7: [{ to: 49, km: 11.9 }, { from: 50, km: 17.6 }],
+      8: [{ km: 19.7 }],
+    },
+  },
+  {
+    key: "出雲駅伝", match: /出雲駅伝/, base: 1988,
+    eras: {
+      1: [{ from: 21, km: 8.0 }],
+      2: [{ from: 21, km: 5.8 }],
+      3: [{ to: 25, km: 7.9 }, { from: 26, km: 8.5 }],
+      4: [{ from: 21, km: 6.2 }],
+      5: [{ from: 21, km: 6.4 }],
+      6: [{ from: 21, km: 10.2 }],
+    },
+  },
+];
+
+let relayIndex = Math.max(0, RELAYS.findIndex((r) => r.key === qs("relay")));
+
+/**
+ * 回ごとの特記事項。一覧では短いバッジ（マウスを乗せると全文）で表示する。
+ * key は ekiden-record の roundName と同じ「駅伝名/回次」。
+ */
+const ROUND_NOTES = {
+  "出雲駅伝/第38回": {
+    badge: { ja: "9:10開始", zh: "9:10起跑" },
+    note: {
+      ja: "第38回（2026年）は開始時刻が午後から9:10に変更された大会。コンディションが従来と異なるため、区間記録・順位は参考値として見てください。",
+      zh: "第38届（2026年）起跑时间由下午提前到 9:10。比赛条件与以往不同，区间记录与排名仅供参考。",
+    },
+  },
+};
+
+const $sortBy = document.getElementById("sortBy");
+const $scope = document.getElementById("scope");
+const $dist = document.getElementById("distFilter");
+const $out = document.getElementById("out");
+
+/** "21.3km" → 21.3 */
+const kmOf = (d) => {
+  const m = String(d || "").match(/([\d.]+)\s*km/i);
+  return m ? Number(m[1]) : null;
+};
+const paceSec = (sec, dist) => (sec && dist ? sec / dist : null);
+
+/** 1kmあたりのペース。小数第1位まで（2:51.5 /km） */
+function fmtPace(sec) {
+  if (sec == null || !Number.isFinite(sec)) return "—";
+  const v = Math.round(sec * 10) / 10;
+  const m = Math.floor(v / 60);
+  const s = v - m * 60;
+  return `${m}:${s.toFixed(1).padStart(4, "0")}`;
+}
+
+/** 这一届是第几回（比赛名没写就用年份推） */
+function roundNoOf(relay, round) {
+  const m = String((round && round.round) || "").match(/第\s*(\d+)\s*回/);
+  if (m) return Number(m[1]);
+  const y = Number(String((round && round.date) || "").slice(0, 4));
+  return y ? y - relay.base : null;
+}
+
+/** 该距离属于哪一代（拿得到就用正式的「第N回以降（年份〜）」说法） */
+function eraNote(relay, interval, km) {
+  const list = relay.eras && relay.eras[interval];
+  if (!list || km == null) return null;
+  const e = list.find((x) => x.km === km);
+  if (!e) return null;
+  const year = (n) => relay.base + n;
+  if (e.from != null && e.to != null) {
+    return { ja: `${e.from}〜${e.to}回（${year(e.from)}〜${year(e.to)}年）`,
+             zh: `第${e.from}〜${e.to}届（${year(e.from)}〜${year(e.to)}年）` };
+  }
+  if (e.from != null) {
+    return { ja: `${e.from}回以降（${year(e.from)}年〜）`, zh: `第${e.from}届以后（${year(e.from)}年起）` };
+  }
+  if (e.to != null) {
+    return { ja: `〜${e.to}回（〜${year(e.to)}年）`, zh: `〜第${e.to}届（〜${year(e.to)}年）` };
+  }
+  return null;
+}
+
+/** 拿不到世代定义时，退而用实际收录的回次范围 */
+function rangeNote(roundNos) {
+  const ns = roundNos.filter((n) => n != null);
+  if (!ns.length) return null;
+  const a = Math.min(...ns);
+  const b = Math.max(...ns);
+  return a === b
+    ? { ja: `第${a}回`, zh: `第${a}届` }
+    : { ja: `第${a}〜${b}回`, zh: `第${a}〜${b}届` };
+}
+
+function renderTabs() {
+  const el = document.getElementById("relayTabs");
+  el.innerHTML = RELAYS.map((r, i) =>
+    `<button class="btn ghost ${i === relayIndex ? "active" : ""}" data-i="${i}">${r.key}</button>`).join("");
+  el.querySelectorAll("[data-i]").forEach((b) =>
+    b.addEventListener("click", () => { relayIndex = Number(b.dataset.i); render(); }));
+}
+
+function recordsFor(relay) {
+  const item = store.ekidenItems.find((i) => relay.match.test(i.name));
+  if (!item) return [];
+  const rounds = store.ekidenRounds.filter((r) => r.ekidenItemId === item.id);
+  const roundById = new Map(rounds.map((r) => [r.id, r]));
+  const activeIds = new Set(store.rosterAsOf(new Date().toISOString().slice(0, 10)).map((s) => s.id));
+  return store.ekidenRecords
+    .filter((r) => roundById.has(r.ekidenRoundId) && r.seconds != null && r.interval != null)
+    .map((r) => {
+      const round = roundById.get(r.ekidenRoundId);
+      const s = store.student(r.studentId);
+      const dist = kmOf(r.distance);
+      return {
+        record: r, round, student: s, dist,
+        roundNo: roundNoOf(relay, round),
+        pace: paceSec(r.seconds, dist),
+        grade: s ? store.gradeOfRecord(r, s) : null,
+        current: round.date >= season.from && round.date <= season.to,
+        active: s ? activeIds.has(s.id) : false,
+      };
+    });
+}
+
+/** 每个区间「最新的一届」用的距离＝现行コース */
+function currentDistance(rows) {
+  const m = new Map();
+  for (const r of rows) {
+    const key = r.record.interval;
+    const cur = m.get(key);
+    if (!cur || String(r.round.date || "") > cur.date) m.set(key, { date: String(r.round.date || ""), distance: r.record.distance });
+  }
+  return m;
+}
+
+function render() {
+  renderTabs();
+  const relay = RELAYS[relayIndex];
+  let rows = recordsFor(relay);
+  const curDist = currentDistance(rows);
+
+  // 距離の選択肢（登場した距離を長い順に）
+  const dists = [...new Set(rows.map((r) => r.record.distance).filter(Boolean))]
+    .sort((a, b) => (kmOf(b) || 0) - (kmOf(a) || 0));
+  const keep = $dist.value;
+  $dist.innerHTML = `<option value="">${t("すべて", "全部")}</option>
+    <option value="__current">${t("現在のコース", "当前赛道")}</option>`
+    + dists.map((d) => `<option value="d:${esc(d)}">${esc(d)}</option>`).join("");
+  if ([...$dist.options].some((o) => o.value === keep)) $dist.value = keep;
+
+  if ($scope.value === "active") rows = rows.filter((r) => r.active);
+  if ($dist.value === "__current") {
+    rows = rows.filter((r) => r.record.distance === (curDist.get(r.record.interval) || {}).distance);
+  } else if ($dist.value.startsWith("d:")) {
+    const d = $dist.value.slice(2);
+    rows = rows.filter((r) => r.record.distance === d);
+  }
+
+  document.getElementById("seasonBadge").textContent =
+    `${season.label}（${season.from} 〜 ${season.to}）${t("の記録を緑で表示", "的成绩用绿色显示")}`;
+
+  $out.textContent = "";
+  const intervals = [...new Set(rows.map((r) => r.record.interval))].sort((a, b) => a - b);
+  if (!intervals.length) {
+    $out.innerHTML = `<div class="card empty">${t("記録がありません", "没有记录")}</div>`;
+    return;
+  }
+
+  const byPace = $sortBy.value === "pace";
+  for (const iv of intervals) {
+    const list0 = rows.filter((r) => r.record.interval === iv);
+    // 距离ごとに分ける（＝改道前/改道後は別のランキング）
+    const groups = new Map();
+    for (const r of list0) {
+      const k = r.record.distance || "—";
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(r);
+    }
+    const ordered = [...groups.entries()].sort((a, b) =>
+      Math.max(...b[1].map((r) => r.roundNo ?? 0)) - Math.max(...a[1].map((r) => r.roundNo ?? 0)));
+    const nowDist = (curDist.get(iv) || {}).distance;
+
+    for (const [dist, list] of ordered) {
+      list.sort((a, b) => {
+        const av = byPace ? (a.pace ?? Infinity) : a.record.seconds;
+        const bv = byPace ? (b.pace ?? Infinity) : b.record.seconds;
+        return av - bv;
+      });
+      list.forEach((r, i) => { r.rank = i + 1; r.__cls = r.current ? "row-current" : ""; });
+      const best = list[0];
+      const note = eraNote(relay, iv, kmOf(dist)) || rangeNote(list.map((r) => r.roundNo));
+      const isNow = dist === nowDist;
+
+      const card = document.createElement("section");
+      card.className = "card pad-0";
+      card.style.marginBottom = "16px";
+      card.innerHTML = `<div class="card-title" style="padding:16px 16px 0">
+        <h3>${iv}区 <span class="hint">${esc(dist)}</span>${isNow
+          ? ` <span class="badge gold" data-no-i18n>${t("現行コース", "当前赛道")}</span>` : ""}</h3>
+        <span class="hint">${note ? esc(t(note.ja, note.zh)) + "・" : ""}${list.length}${t("本", "条")}</span></div>
+        <div class="body" style="padding:0 4px 8px"></div>`;
+      $out.append(card);
+
+      renderTable(card.querySelector(".body"), [
+        { label: "#", cls: "mid", render: (r) => `<span class="rank">${r.rank}</span>` },
+        { label: "記録", cls: "num", render: (r) => `<span class="time">${scoreText(r.record)}</span>` },
+        { label: "ペース", cls: "num", render: (r) => r.pace
+          ? `<span class="time" style="color:var(--muted)">${fmtPace(r.pace)}/km</span>` : "—" },
+        { label: "選手", cls: "name", render: (r) => r.student
+          ? `<a href="player.html?id=${r.student.id}">${esc(r.student.name)}</a>` : "—" },
+        { label: "学年", cls: "mid", render: (r) => gradeLabel(r.grade) },
+        { label: "大会", render: (r) => {
+          const itemName = store.ekidenItemById.get(r.round.ekidenItemId)?.name || "";
+          const note = ROUND_NOTES[`${itemName}/${r.round.round}`];
+          return `<a href="race.html?type=ekiden&id=${r.round.id}">${esc(itemName)} ${esc(r.round.round)}</a>`
+            + (note
+              ? ` <span class="badge gold" data-no-i18n title="${esc(t(note.note.ja, note.note.zh))}">`
+                + `${esc(t(note.badge.ja, note.badge.zh))}</span>`
+              : "");
+        } },
+        { label: "日付", cls: "mid", render: (r) => fmtDate(r.round.date) },
+        { label: "区間順位", cls: "mid", render: (r) => r.record.rank
+          ? `<span class="badge ${r.record.rank === 1 ? "gold" : ""}">${r.record.rank}位</span>` : "—" },
+        { label: "差", cls: "num", render: (r) => r === best ? "—"
+          : `<span class="time" style="color:var(--muted)">+${(r.record.seconds - best.record.seconds).toFixed(2)}</span>` },
+      ], list, { empty: t("記録がありません", "没有记录") });
+    }
+  }
+}
+
+$sortBy.addEventListener("change", render);
+$scope.addEventListener("change", render);
+$dist.addEventListener("change", render);
+document.addEventListener("langchange", () => render());
+render();
+</script>
+</body>
+</html>

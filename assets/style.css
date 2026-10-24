@@ -1,0 +1,340 @@
+/* 青山学院大学 陸上競技部 データサイト — 设计系统 */
+:root{
+  --bg:#f5f6f4;
+  --panel:#ffffff;
+  --panel-2:#fafbfa;
+  --ink:#131a17;
+  --ink-2:#3c463f;
+  --muted:#6f7a73;
+  --line:#e3e7e3;
+  --line-2:#eef1ee;
+  --accent:#0f7a52;
+  --accent-2:#12a06a;
+  --accent-soft:#e8f4ed;
+  --accent-ink:#0a5336;
+  --gold:#b8912b;
+  --silver:#8d98a1;
+  --bronze:#b1733f;
+  --danger:#b4442f;
+  --radius:12px;
+  --radius-sm:8px;
+  --shadow:0 1px 2px rgba(16,24,20,.05), 0 10px 28px rgba(16,24,20,.06);
+  --shadow-sm:0 1px 2px rgba(16,24,20,.06);
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Sans","Noto Sans JP","Microsoft YaHei","PingFang SC",sans-serif;
+}
+
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--sans);
+  font-size:14px;
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+h1,h2,h3,h4{margin:0;font-weight:700;letter-spacing:-.01em;line-height:1.3}
+
+/* ---------- 布局 ---------- */
+.site-header{
+  position:sticky;top:0;z-index:40;
+  background:rgba(255,255,255,.86);
+  backdrop-filter:saturate(180%) blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.site-header .inner{
+  max-width:1180px;margin:0 auto;padding:10px 20px;
+  display:flex;align-items:center;gap:22px;
+}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:15px;color:var(--ink);white-space:nowrap}
+.brand:hover{text-decoration:none}
+.brand .mark{
+  width:26px;height:26px;border-radius:7px;flex:0 0 auto;
+  background:linear-gradient(140deg,#12a06a,#0b5c3e);
+  display:grid;place-items:center;color:#fff;font-size:12px;font-weight:800;
+}
+.brand .sub{color:var(--muted);font-weight:600;font-size:12px}
+.main-nav{display:flex;gap:2px;flex-wrap:wrap;margin-left:auto}
+.main-nav a{
+  padding:7px 10px;border-radius:999px;color:var(--ink-2);font-weight:600;font-size:12.5px;
+  white-space:nowrap;
+}
+.main-nav a:hover{background:var(--line-2);text-decoration:none}
+.main-nav a.active{background:var(--accent-soft);color:var(--accent-ink)}
+
+main{max-width:1180px;margin:0 auto;padding:24px 20px 72px}
+
+.page-head{margin:6px 0 20px}
+.page-head h1{font-size:24px}
+.page-head p{color:var(--muted);margin:6px 0 0}
+.breadcrumb{font-size:12px;color:var(--muted);margin-bottom:10px}
+.breadcrumb a{color:var(--muted)}
+
+.grid{display:grid;gap:16px}
+.grid.cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.grid.cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.grid.cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media(max-width:900px){
+  .grid.cols-3,.grid.cols-4{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:640px){
+  .grid.cols-2,.grid.cols-3,.grid.cols-4{grid-template-columns:1fr}
+  .site-header .inner{flex-wrap:wrap;gap:8px}
+  .main-nav{margin-left:0;width:100%}
+}
+
+/* ---------- 卡片 / 面板 ---------- */
+.card{
+  background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  box-shadow:var(--shadow-sm);padding:18px;
+}
+.card.pad-0{padding:0;overflow:hidden}
+.card-title{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  margin:0 0 12px;
+}
+.card-title h3{font-size:15px}
+.card-title .hint{font-size:12px;color:var(--muted);font-weight:500}
+
+.stat{display:flex;flex-direction:column;gap:2px}
+.stat .label{font-size:12px;color:var(--muted);font-weight:600}
+.stat .value{font-size:26px;font-weight:800;font-variant-numeric:tabular-nums}
+.stat .value small{font-size:13px;font-weight:600;color:var(--muted);margin-left:3px}
+
+/* ---------- 控件 ---------- */
+.controls{
+  display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;
+  background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  padding:14px 16px;box-shadow:var(--shadow-sm);margin-bottom:16px;
+}
+.field{display:flex;flex-direction:column;gap:5px;min-width:0}
+.field > label{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.02em}
+select,input[type=text],input[type=date],input[type=search]{
+  font:inherit;font-size:13px;color:var(--ink);background:var(--panel);
+  border:1px solid var(--line);border-radius:var(--radius-sm);
+  padding:7px 10px;min-height:34px;
+}
+select:focus,input:focus{outline:2px solid var(--accent-soft);outline-offset:-1px;border-color:var(--accent)}
+.btn{
+  font:inherit;font-size:13px;font-weight:600;cursor:pointer;
+  background:var(--accent);color:#fff;border:1px solid var(--accent);
+  border-radius:var(--radius-sm);padding:8px 14px;min-height:34px;
+}
+.btn:hover{background:var(--accent-ink)}
+.btn.ghost{background:var(--panel);color:var(--ink-2);border-color:var(--line)}
+.btn.ghost:hover{background:var(--line-2)}
+.btn.ghost.active{background:var(--accent-soft);color:var(--accent-ink);border-color:transparent}
+.btn.mini{padding:1px 8px;min-height:22px;font-size:12px;line-height:1.4;border-radius:6px}
+.quick-dates{display:flex;gap:6px;flex-wrap:wrap}
+.switch{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:600;color:var(--ink-2);cursor:pointer}
+
+/* ---------- 表格 ---------- */
+.table-wrap{overflow-x:auto;border-radius:var(--radius)}
+table.data{width:100%;border-collapse:collapse;font-size:13px;background:var(--panel)}
+table.data th,table.data td{padding:8px 12px;text-align:left;border-bottom:1px solid var(--line-2);white-space:nowrap}
+table.data thead th{
+  position:sticky;top:0;background:var(--panel-2);
+  font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.03em;
+  border-bottom:1px solid var(--line);
+}
+table.data tbody tr:hover{background:var(--accent-soft)}
+table.data td.num,table.data th.num{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--mono)}
+table.data td.mid,table.data th.mid{text-align:center}
+table.data .rank{font-family:var(--mono);font-weight:700}
+table.data tr.r1 .rank{color:var(--gold)}
+table.data tr.r2 .rank{color:var(--silver)}
+table.data tr.r3 .rank{color:var(--bronze)}
+table.data td.name{font-weight:600}
+/* 本赛季（4/1〜翌年3/31）的记录：淡绿底 + 左侧色条 */
+table.data tbody tr.row-current{background:#eef7f0}
+table.data tbody tr.row-current td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
+table.data tbody tr.row-current:hover{background:var(--accent-soft)}
+/* ハイライト（入学年・選手） */
+table.data tbody tr.row-hl > td{background:#fdf6e3}
+table.data tbody tr.row-hl td:first-child{box-shadow:inset 3px 0 0 var(--gold)}
+table.data tbody tr.row-hl:hover > td{background:#fbf0d8}
+table.data .time{font-family:var(--mono);font-variant-numeric:tabular-nums}
+table.data.compact th,table.data.compact td{padding:5px 10px}
+
+.badge{
+  display:inline-block;padding:1px 7px;border-radius:999px;
+  font-size:11px;font-weight:700;background:var(--line-2);color:var(--ink-2);
+  border:1px solid transparent;
+}
+.badge.green{background:var(--accent-soft);color:var(--accent-ink)}
+.badge.gold{background:#fbf3dd;color:#8a6a12}
+.badge.pb{background:#fdecea;color:#a33220}
+.badge.sb{background:#e8f1fb;color:#1f4e79}
+.badge.pink{background:#fdeaf2;color:#a32a63}
+.badge.dim{color:var(--muted)}
+/* 「樹立日」の後ろに付ける「（2年）」 */
+.grade-note{color:var(--muted);font-size:11px;font-weight:600;margin-left:2px}
+/* 三大駅伝 出場者：学年 × 大会 のマトリクス */
+table.ek-matrix{width:100%;border-collapse:separate;border-spacing:3px;font-size:13px}
+table.ek-matrix th{font-size:11px;font-weight:700;color:var(--muted);text-align:center;padding:3px 6px;white-space:nowrap}
+table.ek-matrix tbody th{text-align:right;color:var(--ink-2)}
+table.ek-matrix td.ek-cell{text-align:center;padding:5px 4px;border-radius:6px;background:var(--panel);box-shadow:inset 0 0 0 1px var(--line-2)}
+table.ek-matrix td.ek-cell.empty{background:transparent}
+table.ek-matrix td.r1{background:#fdf1c6}
+table.ek-matrix td.r2{background:#e9edf0}
+table.ek-matrix td.r3{background:#f8e6d2}
+table.ek-matrix td.rec .ek-pos,table.ek-matrix td.rec .ek-time{color:var(--danger);font-weight:700}
+.ek-pos{display:block;font-weight:700;line-height:1.3}
+.ek-time{display:block;font-family:var(--mono);font-size:11px;color:var(--muted);line-height:1.3}
+.ek-key{display:inline-block;padding:1px 7px;border-radius:999px;font-size:11px}
+.ek-key.r1{background:#fdf1c6;color:#8a6a12}
+.ek-key.r2{background:#e9edf0;color:#4a545c}
+.ek-key.r3{background:#f8e6d2;color:#8a5a2b}
+/* 三大駅伝 出場者：カードを並べる（PC=4列 / タブレット=2列 / 手机=1列） */
+#out.ek-grid{display:grid;gap:12px;grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:1180px){#out.ek-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:680px){#out.ek-grid{grid-template-columns:1fr}}
+#out.ek-grid .ek-card{font-size:12px}
+#out.ek-grid .card-title{flex-wrap:wrap;gap:2px}
+#out.ek-grid .card-title h3{font-size:14px}
+#out.ek-grid .card-title .hint{font-size:11px}
+/* 三大駅伝 出場者：5000/10000/ハーフ/高校PB */
+.ek-info{display:grid;grid-template-columns:1fr 1fr;gap:2px 10px;padding:6px 12px 2px;font-size:11px;color:var(--ink)}
+.ek-info b{color:var(--muted);font-weight:600;margin-right:5px}
+/* 選手ページ上段：左＝プロフィール／右＝三大駅伝 出場 */
+.player-top{display:grid;gap:16px;grid-template-columns:minmax(300px,.8fr) minmax(420px,1.2fr);align-items:start;margin:18px 0}
+.player-top.single{grid-template-columns:1fr}
+.player-top > #profile .card.profile{margin:0}
+.player-top .card{margin:0}
+@media (max-width:900px){.player-top{grid-template-columns:1fr}}
+/* このサイトについて：出典や注意点のリスト */
+.about-list{margin:0;padding-left:1.2em;line-height:1.9;font-size:13.5px}
+.about-list li{margin:2px 0}
+.about-list li::marker{color:var(--muted)}
+.about-list .hint{display:block;font-size:12px;color:var(--muted)}
+.about-list a{font-weight:600}
+/* 組ごとのまとまりを分かりやすく：見出しの帯＋交互の背景 */
+table.data tbody tr.group-band > td{
+  background:var(--accent-soft);color:var(--accent-ink);
+  font-size:12px;font-weight:700;letter-spacing:.03em;
+  padding:5px 12px;border-top:2px solid var(--line);border-bottom:1px solid var(--line);
+}
+table.data tbody tr.group-start > td{border-top:1px solid var(--line-2)}
+table.data tbody tr.g-odd > td{background:var(--panel-2)}
+table.data tbody tr:hover > td{background:var(--accent-soft)}
+.delta-up{color:var(--accent);font-weight:700}
+.delta-down{color:var(--danger);font-weight:700}
+
+.empty{padding:36px;text-align:center;color:var(--muted)}
+
+/* ---------- 选手 ---------- */
+.player-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
+.player-card{
+  background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  padding:14px;box-shadow:var(--shadow-sm);color:inherit;
+}
+.player-card:hover{border-color:var(--accent);text-decoration:none;box-shadow:var(--shadow)}
+.player-card .top{display:flex;gap:12px;align-items:center}
+.avatar{
+  width:48px;height:48px;border-radius:50%;flex:0 0 auto;overflow:hidden;
+  background:linear-gradient(140deg,#e8f4ed,#cfe6d9);
+  display:grid;place-items:center;font-weight:800;color:var(--accent-ink);font-size:16px;
+}
+.avatar.lg{width:104px;height:104px;font-size:34px}
+.avatar img{width:100%;height:100%;object-fit:cover}
+.player-card .nm{font-weight:700;font-size:14px}
+.player-card .meta{font-size:11px;color:var(--muted)}
+.player-card .pbs{margin-top:10px;display:flex;gap:14px;font-size:11px;color:var(--muted)}
+.player-card .pbs b{display:block;font-family:var(--mono);font-size:13px;color:var(--ink)}
+
+.profile{display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap}
+.profile .info dl{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin:0;font-size:13px}
+.profile .info dt{color:var(--muted)}
+.profile .info dd{margin:0;font-weight:600}
+
+/* ---------- 图表 ---------- */
+.chart{width:100%;position:relative}
+.chart svg{display:block;width:100%;height:auto;overflow:visible}
+.chart .grid-line{stroke:var(--line-2);stroke-width:1}
+.chart .axis-text{fill:var(--muted);font-size:10px}
+.chart .series-line{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.chart .hover-line{stroke:var(--line);stroke-width:1;stroke-dasharray:3 3}
+.chart .tip{
+  position:absolute;pointer-events:none;z-index:5;
+  background:rgba(19,26,23,.94);color:#fff;border-radius:8px;padding:7px 10px;
+  font-size:12px;line-height:1.5;white-space:nowrap;transform:translate(-50%,-115%);
+  box-shadow:0 6px 18px rgba(0,0,0,.2);
+}
+.chart .tip b{font-family:var(--mono)}
+.legend{display:flex;flex-wrap:wrap;gap:12px;margin-top:10px;font-size:12px}
+.legend .item{display:inline-flex;align-items:center;gap:6px;cursor:pointer;user-select:none}
+.legend .swatch{width:10px;height:10px;border-radius:3px}
+.legend .item.off{opacity:.38}
+.chart-empty{padding:40px;text-align:center;color:var(--muted);font-size:13px}
+
+/* ---------- 其他 ---------- */
+.list-rows{display:flex;flex-direction:column}
+.row-item{
+  display:flex;align-items:center;gap:12px;padding:9px 4px;
+  border-bottom:1px solid var(--line-2);font-size:13px;
+}
+.row-item:last-child{border-bottom:0}
+.row-item .date{font-family:var(--mono);font-size:12px;color:var(--muted);width:92px;flex:0 0 auto}
+.row-item .txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.footnote{color:var(--muted);font-size:12px;margin-top:14px;line-height:1.7}
+.site-footer{border-top:1px solid var(--line);margin-top:40px;padding:22px 20px 40px;color:var(--muted);font-size:12px}
+.site-footer .inner{max-width:1180px;margin:0 auto;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.loading{padding:60px;text-align:center;color:var(--muted)}
+.tabs{display:flex;gap:6px;border-bottom:1px solid var(--line);margin-bottom:14px}
+.tabs button{
+  font:inherit;font-size:13px;font-weight:600;background:none;border:0;cursor:pointer;
+  padding:9px 12px;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;
+}
+.tabs button.active{color:var(--accent-ink);border-bottom-color:var(--accent)}
+.pill-row{display:flex;gap:8px;flex-wrap:wrap}
+.kbd{font-family:var(--mono);font-size:11px;background:var(--line-2);border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+.demo-banner{
+  background:#fff5e5;border:1px solid #f0d9ae;color:#8a5b12;
+  border-radius:var(--radius-sm);padding:9px 14px;margin-bottom:16px;
+  font-size:12px;font-weight:600;
+}
+
+/* 表格可排序表头 */
+table.data thead th.sortable{cursor:pointer;user-select:none}
+table.data thead th.sortable:hover{background:var(--accent-soft);color:var(--accent-ink)}
+table.data thead th.sorted{color:var(--accent-ink);background:var(--accent-soft)}
+table.data thead th .sort-ind{
+  display:inline-block;margin-left:4px;font-size:10px;line-height:1;
+  color:var(--muted);opacity:.5;
+}
+table.data thead th.sortable:hover .sort-ind{opacity:.9;color:var(--accent-ink)}
+table.data thead th.sorted .sort-ind{
+  opacity:1;color:#0a5238;font-size:11px;font-weight:700;
+}
+
+/* 个人最好成绩：红字 + 红框（不再用文字标签） */
+.time.pb-cell{
+  color:#c0392b;font-weight:800;
+  background:#fdf1ef;border:1px solid #e9a79f;border-radius:6px;
+  padding:1px 6px;
+}
+tr:hover .time.pb-cell{background:#fbe4e1}
+
+/* 系列很多时的图例 */
+.legend.scroll{max-height:96px;overflow-y:auto;padding-right:4px}
+
+/* 图表期间选择 */
+.period-ctl{display:inline-flex;align-items:center;gap:6px}
+.period-ctl select,.period-ctl input{min-height:30px}
+.period-ctl .pd-sep{color:var(--muted)}
+
+/* 语言切换悬浮按钮 */
+.lang-fab{
+  position:fixed;right:18px;bottom:18px;z-index:60;
+  font:inherit;font-size:13px;font-weight:700;cursor:pointer;
+  background:var(--panel);color:var(--ink);
+  border:1px solid var(--line);border-radius:999px;
+  padding:9px 15px;box-shadow:0 6px 20px rgba(16,24,20,.16);
+  transition:transform .12s ease, box-shadow .12s ease;
+}
+.lang-fab:hover{transform:translateY(-2px);box-shadow:0 10px 26px rgba(16,24,20,.2);background:var(--accent-soft);color:var(--accent-ink)}
+@media(max-width:640px){.lang-fab{right:12px;bottom:12px;padding:8px 12px;font-size:12px}}

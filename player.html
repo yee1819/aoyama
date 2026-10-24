@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>選手詳細 | 青山学院大学 陸上競技部</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<header data-site-header></header>
+
+<main>
+  <div class="breadcrumb"><a href="index.html">概況</a> / <a href="players.html">部員一覧</a> / <span id="crumb">選手</span></div>
+  <!-- 上段：左＝プロフィール／右＝三大駅伝 出場（2カラム） -->
+  <div class="player-top single" id="playerTop">
+    <div id="profile"></div>
+    <section class="card" id="majorEkidenCard" hidden>
+      <div class="card-title">
+        <h3>三大駅伝 出場</h3>
+        <span class="hint" id="majorEkidenHint">
+          区間1〜3位は色付き・<b style="color:var(--danger)">赤字</b>＝区間新記録
+        </span>
+      </div>
+      <div id="majorEkiden"></div>
+    </section>
+  </div>
+
+  <section class="card pad-0" style="margin:18px 0">
+    <div class="card-title" style="padding:16px 16px 0"><h3>自己ベスト</h3><span class="hint">全種目</span></div>
+    <div id="pbs" style="padding:0 4px 8px"></div>
+  </section>
+
+  <section class="card" style="margin-bottom:18px">
+    <div class="card-title">
+      <h3>記録の推移</h3>
+      <div class="pill-row">
+        <select id="chartItem" style="min-height:30px"></select>
+        <select id="lineStyle" style="min-height:30px">
+          <option value="line" selected>折れ線</option>
+          <option value="step">階段</option>
+        </select>
+        <span class="hint" id="chartSpan"></span>
+      </div>
+    </div>
+    <div id="chart"></div>
+  </section>
+
+  <section class="card" style="margin-bottom:18px">
+    <div class="card-title">
+      <h3>大会記録</h3>
+      <div class="pill-row" style="align-items:center">
+        <select id="recInclude" style="min-height:30px">
+          <option value="all">全部成績</option>
+          <option value="enrolled">在学中のみ</option>
+          <option value="pb">自己ベスト</option>
+        </select>
+        <span class="hint" id="recCount"></span>
+      </div>
+    </div>
+    <div id="history"></div>
+  </section>
+
+  <section class="card">
+    <div class="card-title"><h3>駅伝記録</h3><span class="hint" id="ekiCount"></span></div>
+    <div id="ekiden"></div>
+  </section>
+</main>
+
+<footer data-site-footer></footer>
+
+<script type="module">
+import { loadStore, formatScore, formatDiff, ITEM_ORDER, scoreText } from "./assets/store.js";
+import {
+  mountLayout, setGeneratedAt, renderTable, avatarHTML, fmtDate, fmtDateCell, gradeLabel, qs, esc, remarkBadge,
+} from "./assets/ui.js";
+import { lineChart } from "./assets/charts.js";
+import { ekidenMatrixHtml } from "./assets/ekiden-matrix.js";
+
+const store = await loadStore();
+mountLayout("player.html");
+setGeneratedAt(store.generatedAt);
+
+const id = Number(qs("id"));
+const s = store.student(id);
+const profileEl = document.getElementById("profile");
+
+if (!s) {
+  profileEl.innerHTML = `<div class="card empty">選手が見つかりません（id=${esc(qs("id") || "")}）</div>`;
+} else {
+  document.title = `${s.name} | 青山学院大学 陸上競技部`;
+  document.getElementById("crumb").textContent = s.name;
+  const today = new Date();
+  const todayISO = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const grade = store.gradeAt(s, todayISO);
+  const posLabel = { main: "主将", sub_main: "副主将", leader: "寮長" }[s.position];
+  const enrollment = [
+    ["入学時5000m", s.enrollment5000m], ["入学3000m", s.enrollment3000m],
+    ["入学10000m", s.enrollment10000m], ["入学1500m", s.enrollment1500m],
+  ].filter(([, v]) => v);
+
+  profileEl.innerHTML = `
+    <div class="card profile">
+      ${avatarHTML(s, "lg")}
+      <div class="info" style="flex:1;min-width:260px">
+        <h1 style="font-size:26px">${esc(s.name)}
+          ${(s.sex || "男") === "女" ? `<span class="badge pink" style="vertical-align:6px">女子</span>` : ""}
+          ${posLabel ? `<span class="badge green" style="vertical-align:6px">${posLabel}</span>` : ""}
+        </h1>
+        <p style="color:var(--muted);margin:4px 0 12px">
+          ${esc(s.kanaName || "")} ${s.englishName ? `<span style="opacity:.7">/ ${esc(s.englishName)}</span>` : ""}
+        </p>
+        <dl>
+          <dt>入学 / 卒業</dt><dd>${s.enrollmentYear || "—"} 年${s.graduationYear ? " / " + s.graduationYear + " 年" : ""}</dd>
+          <dt>学年</dt><dd>${gradeLabel(grade) || (s.status === "withdraw" ? "退部" : "—")}</dd>
+          <dt>出身高校</dt><dd>${esc(store.schoolName(s.highSchoolId) || "—")}</dd>
+          <dt>学部・専攻</dt><dd>${esc(s.major || "—")}</dd>
+          ${s.position && s.position !== "none" ? `<dt>役職</dt><dd>${posLabel || "—"}${s.appointmentYear ? `（${s.appointmentYear}年）` : ""}</dd>` : ""}
+          ${enrollment.map(([k, v]) => `<dt>${k}</dt><dd><span class="time">${esc(v)}</span></dd>`).join("")}
+        </dl>
+      </div>
+      <div style="min-width:180px">
+        <a class="btn ghost" href="rankings.html?date=${todayISO}&item=five_5000m">同世代と比較</a>
+      </div>
+    </div>`;
+
+  // --- 自己ベスト ---
+  const pbs = store.personalBests(id);
+  // 記録をクリックすると、その記録を出した大会のページへ
+  const bestCell = (rec, inner) => (rec && rec.competitionId)
+    ? `<a href="race.html?type=competition&id=${rec.competitionId}"
+        title="${esc(rec.competitionName || "大会詳細へ")}">${inner}</a>`
+    : inner;
+  renderTable(document.getElementById("pbs"), [
+    { label: "種目", render: (r) => esc(r.label) },
+    { label: "自己ベスト", cls: "num", render: (r) =>
+      bestCell(r.record, `<span class="time">${scoreText(r.record)}</span>`) },
+    { label: "樹立日", cls: "mid", render: (r) => fmtDateCell(r.record, s) },
+    { label: "大会", render: (r) => (r.record.competitionId
+      ? `<a href="race.html?type=competition&id=${r.record.competitionId}">${esc(r.record.competitionName || "—")}</a>`
+      : esc(r.record.competitionName || "—")) },
+    { label: "順位", cls: "mid", render: (r) => r.record.rank ? `<span class="badge ${r.record.rank === 1 ? "gold" : ""}">${r.record.rank}位</span>` : "—" },
+  ], pbs, { empty: "記録がありません" });
+  document.getElementById("pbs").firstChild.querySelector("table").classList.add("compact");
+
+  // --- 三大駅伝 出場（学年 × 大会）---
+  const major = ekidenMatrixHtml(store, id);
+  if (major) {
+    document.getElementById("majorEkiden").innerHTML = major;
+    document.getElementById("majorEkidenCard").hidden = false;
+    document.getElementById("playerTop").classList.remove("single");
+  }
+
+  // 成績包含（全部成績 / 在学中のみ / 自己ベスト）—— 图表与大会記録共用
+  const $recInclude = document.getElementById("recInclude");
+  const includeMode = () => $recInclude.value;
+  // --- 記録推移チャート ---
+  // 期間指定は付けない。在学期間（入学年4/1〜卒業年3/31）だけを横軸にする。
+  const enYear = Number(s.enrollmentYear) || null;
+  const grYear = Number(s.graduationYear) || (enYear ? enYear + 4 : null);
+  const inFrom = enYear ? `${enYear}-04-01` : null;
+  // 入学 2021年4月 → 卒業 2025年3月（4年間）。グラフの右端もその 3/31。
+  const inTo = grYear ? `${grYear}-03-31` : null;
+  document.getElementById("chartSpan").textContent = enYear
+    ? `${enYear}年4月 〜 ${grYear}年3月（在学期間）`
+    : "";
+  const chartItems = ITEM_ORDER.filter((k) => store.recordsByStudent.get(id)?.some((r) => r.item === k));
+  const $ci = document.getElementById("chartItem");
+  $ci.innerHTML = chartItems.map((k) => `<option value="${k}">${store.itemLabel(k)}</option>`).join("");
+  const drawChart = () => {
+    const item = $ci.value;
+    const hist = store.pbHistory(id, item, null, { include: includeMode() });
+    const points = hist
+      .filter((r) => r.date && (!inFrom || r.date >= inFrom) && (!inTo || r.date <= inTo))
+      .map((r) => ({ x: r.date, y: r.seconds, meta: r }));
+    // PB は次の更新まで（在学中なら今日まで）続くので、続きの点を足す
+    const carryTo = [inTo, todayISO].filter(Boolean).sort()[0] || todayISO;
+    if (points.length && points[points.length - 1].x < carryTo) {
+      points.push({ x: carryTo, y: points[points.length - 1].y, meta: points[points.length - 1].meta, carry: true });
+    }
+    // 横軸＝在学期間まるごと（データが少なくても軸は固定）
+    const xMin = inFrom || (points[0] && points[0].x) || null;
+    const lastX = points.length ? points[points.length - 1].x : null;
+    // 横軸の右端＝在学期間の終わり or 今日、の早い方（データがはみ出すならデータ優先）
+    const cap = [inTo, todayISO].filter(Boolean).sort()[0] || null;
+    const xMax = (lastX && cap && lastX > cap) ? lastX : (cap || lastX);
+    lineChart(document.getElementById("chart"), {
+      series: [{ name: `${s.name} ${store.itemLabel(item)}`, points }],
+      xMin, xMax,
+      step: document.getElementById("lineStyle").value === "step",
+      formatY: (v) => formatScore(v, false),
+      tooltip: (p) => `<div style="opacity:.7">${fmtDate(p.x)}</div>
+        <div><b>${formatScore(p.y)}</b>${p.meta.rank ? ` <span style="opacity:.75">${p.meta.rank}位</span>` : ""}</div>
+        ${p.meta.competitionName ? `<div style="opacity:.7">${esc(p.meta.competitionName)}</div>` : ""}`,
+      emptyText: "自己ベスト更新の記録がありません",
+    });
+  };
+  $ci.addEventListener("change", drawChart);
+  document.getElementById("lineStyle").addEventListener("change", drawChart);
+  if (chartItems.length) {
+    // 默认选「刷新次数最多」的项目，图表信息量最大
+    $ci.value = chartItems.reduce((best, k) =>
+      store.pbHistory(id, k, null).length > store.pbHistory(id, best, null).length ? k : best, chartItems[0]);
+    drawChart();
+  }
+  else document.getElementById("chart").innerHTML = `<div class="chart-empty">記録がありません</div>`;
+
+  // --- 大会記録 ---
+  const renderHistory = () => {
+    const history = store.history(id, { include: includeMode() });
+    document.getElementById("recCount").textContent = `${history.length} 件`;
+    renderTable(document.getElementById("history"), [
+      { label: "日付", cls: "mid", render: (r) => fmtDateCell(r, s) },
+      { label: "大会", render: (r) => r.competitionId
+        ? `<a href="race.html?type=competition&id=${r.competitionId}">${esc(r.competitionName || "—")}</a>`
+        : esc(r.competitionName || "—") },
+      { label: "種目", cls: "mid", render: (r) => esc(store.itemLabel(r.item)) },
+      { label: "記録", cls: "num", render: (r) => r.isFinished === false ? `<span class="badge dim">DNF</span>` : `<span class="time">${esc(r.score || "—")}</span>` },
+      { label: "順位", cls: "mid", render: (r) => r.rank ? `<span class="badge ${r.rank === 1 ? "gold" : ""}">${r.rank}位</span>` : "—" },
+      { label: "組", cls: "mid", render: (r) => esc(r.group || "—") },
+      { label: "備考", render: (r) => remarkBadge(r.remark) },
+    ], history, { empty: "該当する記録がありません" });
+  };
+  $recInclude.addEventListener("change", () => { renderHistory(); drawChart(); });
+  renderHistory();
+
+  // --- 駅伝記録 ---
+  const eki = store.ekidenHistory(id);
+  document.getElementById("ekiCount").textContent = `${eki.length} 件`;
+  renderTable(document.getElementById("ekiden"), [
+      { label: "日付", cls: "mid", render: (r) => fmtDateCell(r, s) },
+    { label: "大会", render: (r) => `<a href="race.html?type=ekiden&id=${r.ekidenRoundId}">${esc(r.roundName || "—")}</a>` },
+    { label: "区間", cls: "mid", render: (r) => r.interval ? `${r.interval}区` : "—" },
+    { label: "距離", cls: "num", render: (r) => esc(r.distance || "—") },
+    { label: "区間記録", cls: "num", render: (r) => `<span class="time">${esc(r.score || "—")}</span>` },
+    { label: "区間順位", cls: "mid", render: (r) => r.rank ? `<span class="badge ${r.rank === 1 ? "gold" : ""}">${r.rank}位</span>` : "—" },
+    { label: "チーム順位", cls: "mid", render: (r) => r.teamRank ? `${r.teamRank}位` : "—" },
+  ], eki, { empty: "駅伝記録がありません" });
+}
+</script>
+</body>
+</html>

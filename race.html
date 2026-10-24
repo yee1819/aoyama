@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>大会詳細 | 青山学院大学 陸上競技部</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<header data-site-header></header>
+
+<main>
+  <div class="breadcrumb"><a href="index.html">概況</a> / <a href="races.html">大会・記録会</a> / <span id="crumb">詳細</span></div>
+  <div id="head"></div>
+  <div id="body" style="margin-top:18px"></div>
+</main>
+
+<footer data-site-footer></footer>
+
+<script type="module">
+import { loadStore, formatScore, formatDiff, scoreText } from "./assets/store.js";
+import { mountLayout, setGeneratedAt, renderTable, fmtDate, fmtDateFull, gradeLabel, qs, esc, remarkBadge } from "./assets/ui.js";
+
+const store = await loadStore();
+mountLayout("race.html");
+setGeneratedAt(store.generatedAt);
+
+const type = qs("type") === "ekiden" ? "ekiden" : "competition";
+const id = Number(qs("id"));
+const headEl = document.getElementById("head");
+const bodyEl = document.getElementById("body");
+// 記録会などは組ごとに見たいことが多いので、既定は「組別」。?sort=time で記録順にもできる。
+let sortMode = qs("sort") === "time" ? "time" : "group";
+
+/**
+ * 名前の書き方が違うけど同じ大会、という組（必要になったらここに足す）。
+ * 正規化したキーの先頭で判定する。
+ */
+const SERIES_ALIAS = [
+  [/^上海/, "上海ハーフマラソン"],                    // 上海国際ハーフ = 上海ハーフマラソン
+  [/^日本体育大学/, "日本体育大学長距離競技会"],        // 長距離記録会・記録会 も同じシリーズ
+  [/^金栗記念/, "金栗記念選抜陸上中長距離"],            // 選抜／選手権／熊本大会 などの表記ゆれ
+  [/^青山学院対東北学院大学/, "青山学院対東北学院大学定期戦"],  // 陸上競技定期戦／定期戦大会
+  [/^日本学生陸上(競技)?個人選手権/, "日本学生陸上競技個人選手権"],
+  [/^個人選手権/, "日本学生陸上競技個人選手権"],          // 「個人選手権」だけの年度がある
+  [/^鹿島祐徳/, "鹿島祐徳ロードレース"],                // 「公認」の有無
+  [/^アシックスチャレンジ/, "アシックスチャレンジ"],
+  [/^ユニバーシアード/, "ユニバーシアード"],
+  [/^織田記念陸上/, "織田記念陸上"],
+  // 開催時期が同じで名前だけ違うもの（ユーザー確認済み）
+  [/^国士舘(大学|大)?(長距離)?(記録会|競技会)$/, "国士舘大学競技会"],
+  [/^出雲市陸協(長距離)?記録会$/, "出雲市陸協記録会"],
+  [/^相模原(市陸上競技公認記録会|競技会)$/, "相模原競技会"],
+];
+
+if (type === "competition") renderCompetition(); else renderEkiden();
+
+/** 組の並び順キー：数字入りは数字順 → 文字だけ → 組なし（最後） */
+function groupKey(g) {
+  const s = String(g || "").trim();
+  if (!s || /^[ー―—-]+$/.test(s)) return [3, 0, ""];
+  const m = s.match(/(\d+)/);
+  if (m) return [1, Number(m[1]), s];
+  return [2, 0, s];
+}
+/** 組 → 記録 の順に並べる */
+function cmpGroup(a, b) {
+  const ka = groupKey(a.group), kb = groupKey(b.group);
+  return ka[0] - kb[0] || ka[1] - kb[1]
+    || String(ka[2]).localeCompare(String(kb[2]), "ja")
+    || (a.seconds ?? 1e9) - (b.seconds ?? 1e9);
+}
+function cmpTime(a, b) { return (a.seconds ?? 1e9) - (b.seconds ?? 1e9); }
+
+/** 大会名から「同じ大会」のキーを作る（第N回・西暦を落として正規化） */
+function seriesKey(name) {
+  const k = String(name || "")
+    // 冠スポンサーは年ごとに変わることがある（MARCH対抗戦：GMO… → Colantotte…）
+    .replace(/^.+?\bpresents\b\s*/i, "")
+    .replace(/^(天皇賜盃杯?|天皇杯|公認)/, "")   // トロフィー名・「公認」はレース名ではない
+    // ページによっては頭に「2023年4月2日(日)」のような日付が付く
+    .replace(/^\s*\d{4}\s*年\s*\d{1,2}\s*月\s*\d{1,2}\s*日\s*[（(][^）)]*[）)]\s*/, "")
+    .replace(/^\s*[^\s　]*?日\s*[（(][^）)]*[）)]\s*/, "")
+    // 同時開催の区切りが来たら前半だけ見る（両方見るのは seriesKeys の役目）
+    .split(/併催|兼|[\/／]/)[0]
+    .replace(/第\s*[0-9０-９]+\s*回/g, "")
+    // 西暦だけ落とす（「10000m」の "1000" を拾わないよう前後が数字でないもの）
+    .replace(/(?<![0-9０-９])[0-9０-９]{4}(?![0-9０-９])/g, "")
+    .replace(/\d+\s*日目/g, "")             // 関東インカレなどの「3日目」は同じ大会
+    .replace(/\d+(\.\d+)?\s*km/gi, "")      // 日本平桜マラソン23.5km → 日本平桜マラソン
+    .replace(/[\s\u3000・･,，、（）()【】[\]～~]/g, "")
+    .replace(/ハーフマラソン/g, "ハーフ")
+    .replace(/大会$/, "");                   // 「〜大会」の有無は無視
+  const alias = SERIES_ALIAS.find(([re]) => re.test(k));
+  return alias ? alias[1] : (k || String(name || "").trim());
+}
+/**
+ * 「〜併催〜」のように同時開催で名前がつながっている大会は、
+ * 両方をそれぞれ別のシリーズとして扱う（例：日本学生ハーフマラソン併催 香川丸亀国際ハーフマラソン）。
+ */
+function seriesKeys(name) {
+  return String(name || "")
+    // 「併催」「兼」「/」「／」は同時開催の区切り（例：焼津みなとマラソン/大学対抗ペアマラソン）
+    .split(/併催|兼|[\/／]/)
+    .map((part) => seriesKey(part))
+    .filter(Boolean);
+}
+/** 同じ大会（どれか1つでもシリーズが重なる）の一覧。新しい順 */
+function sameSeries(c) {
+  const keys = new Set(seriesKeys(c.name));
+  return store.competitions
+    .filter((x) => !x.ekidenRoundId && seriesKeys(x.name).some((k) => keys.has(k)))
+    .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+}
+/**
+ * 選択肢のラベル。併催の回はどのシリーズか分からなくなるのでフルネーム、
+ * 複数シリーズが混ざったリストのときは「第N回＋大会名」で出す。
+ */
+function editionLabel(c, showSeries) {
+  // 同時開催（併催・兼・/）はどのシリーズか紛らわしいので、正式名をそのまま出す
+  if (/併催|兼|[\/／]|\d+\s*日目/.test(c.name)) return c.name;
+  const base = c.round || c.name;
+  return showSeries ? `${base}　${seriesKey(c.name)}` : base;
+}
+
+function renderCompetition() {
+  const c = store.competitionById.get(id);
+  if (!c) { headEl.innerHTML = `<div class="card empty">大会が見つかりません</div>`; return; }
+  const records = (store.recordsByCompetition.get(id) || []).slice();
+  bodyEl.textContent = "";   // 並び順を切り替えて描き直すので、毎回クリアする
+  document.title = `${c.name} | 青山学院大学 陸上競技部`;
+  document.getElementById("crumb").textContent = c.name;
+
+  // 驿传类比赛的单项成绩都在駅伝表里，直接转到届次详情
+  if (!records.length && c.ekidenRoundId) {
+    document.getElementById("crumb").textContent = c.name;
+    renderEkiden(c.ekidenRoundId);
+    return;
+  }
+
+  const items = [...new Set(records.map((r) => r.item))];
+  const anyGroup = records.some((r) => r.group);
+  const editions = sameSeries(c);
+  // 併催などで複数シリーズが混ざったら、ラベルに大会名も出す
+  const manySeries = new Set(editions.flatMap((x) => seriesKeys(x.name))).size > 1;
+  headEl.innerHTML = `<div class="page-head">
+    <h1>${esc(c.name)}${c.round && !c.name.includes(c.round) ? ` <span class="badge green" style="vertical-align:6px">${esc(c.round)}</span>` : ""}</h1>
+    <p>${fmtDateFull(c.date)} ／ 記録 ${records.length} 件</p>
+  </div>` + ((anyGroup || editions.length > 1) ? `<section class="controls" style="margin-top:12px">
+    ${editions.length > 1 ? `<div class="field">
+      <label>同じ大会の回</label>
+      <select id="editionPick">
+        ${editions.map((x) => `<option value="${x.id}"${x.id === c.id ? " selected" : ""}>`
+          + `${esc(editionLabel(x, manySeries))}${x.date ? `（${fmtDate(x.date)}）` : ""}${x.id === c.id ? " ← 表示中" : ""}</option>`).join("")}
+      </select>
+    </div>` : ""}
+    ${anyGroup ? `<div class="field">
+      <label>並び順</label>
+      <div class="pill-row" id="sortBtns">
+        <button type="button" class="btn ghost${sortMode === "group" ? " active" : ""}" data-sort="group">組別（組 → 記録）</button>
+        <button type="button" class="btn ghost${sortMode === "time" ? " active" : ""}" data-sort="time">記録順（速い順）</button>
+      </div>
+    </div>` : ""}
+  </section>` : "");
+  const $edition = document.getElementById("editionPick");
+  if ($edition) $edition.addEventListener("change", () => {
+    location.href = `race.html?type=competition&id=${$edition.value}`;
+  });
+  const $sortBtns = document.getElementById("sortBtns");
+  if ($sortBtns) $sortBtns.querySelectorAll("[data-sort]").forEach((b) =>
+    b.addEventListener("click", () => { sortMode = b.dataset.sort; renderCompetition(); }));
+
+  if (!records.length) { bodyEl.innerHTML = `<div class="card empty">記録がありません</div>`; return; }
+
+  for (const item of items) {
+    const rows = records.filter((r) => r.item === item)
+      .sort(sortMode === "group" ? cmpGroup : cmpTime);
+    // 組がいくつもあるとき、どこで組が変わるか分かるように区切る
+    if (sortMode === "group") {
+      let prevKey = null, gi = -1;
+      for (const r of rows) {
+        const key = String(r.group || "");
+        const start = key !== prevKey;
+        if (start) { gi++; prevKey = key; }
+        r.__cls = start ? "group-start " : "";
+        r.__gi = gi;
+        r.__gstart = start;
+      }
+    }
+    const card = document.createElement("section");
+    card.className = "card pad-0";
+    card.style.marginBottom = "16px";
+    card.innerHTML = `<div class="card-title" style="padding:16px 16px 0">
+      <h3>${store.itemLabel(item)}</h3><span class="hint">${rows.length} 名</span></div>
+      <div class="body" style="padding:0 4px 8px"></div>`;
+    bodyEl.append(card);
+
+    const hasGroup = rows.some((r) => r.group);
+    const body = card.querySelector(".body");
+    renderTable(body, [
+      { label: "順位", cls: "mid", render: (r) => r.rank
+        ? `<span class="${r.rank <= 3 ? "rank r" + r.rank : "rank"}">${r.rank}</span>` : "—" },
+      { label: "選手", cls: "name", render: (r) => {
+        const s = store.student(r.studentId);
+        return s ? `<a href="player.html?id=${s.id}">${esc(s.name)}</a>` : "—";
+      } },
+      { label: "学年", cls: "mid", render: (r) => gradeLabel(store.gradeOfRecord(r, store.student(r.studentId))) },
+      { label: "記録", cls: "num", render: (r) => r.isFinished === false
+        ? `<span class="badge dim">DNF</span>` : `<span class="time">${esc(r.score || "—")}</span>` },
+      ...(hasGroup ? [{ label: "組", cls: "mid", render: (r) => esc(r.group || "—") }] : []),
+      { label: "備考", render: (r) => remarkBadge(r.remark) },
+    ], rows);
+
+    // 組ごとの見出し行（「A組」の帯）を差し込む
+    if (sortMode === "group" && rows.some((r) => r.__gstart)) {
+      const tbody = body.querySelector("tbody");
+      const cols = body.querySelectorAll("thead th").length;
+      const trs = [...tbody.children];
+      for (let i = trs.length - 1; i >= 0; i--) {
+        const rec = rows[i];
+        if (!rec || !rec.__gstart) continue;
+        const band = document.createElement("tr");
+        band.className = "group-band " + (rec.__gi % 2 ? "g-odd" : "g-even");
+        band.innerHTML = `<td colspan="${cols}">${esc(rec.group || "組なし")}
+          <span class="hint" style="margin-left:8px">${rows.filter((x) => x.__gi === rec.__gi).length}名</span></td>`;
+        trs[i].before(band);
+      }
+    }
+  }
+}
+
+function renderEkiden(roundId = id) {
+  const round = store.ekidenRoundById.get(roundId);
+  if (!round) { headEl.innerHTML = `<div class="card empty">駅伝が見つかりません</div>`; return; }
+  bodyEl.textContent = "";
+  const item = store.ekidenItemById.get(round.ekidenItemId);
+  const title = `${item ? item.name : "駅伝"} ${round.round}`;
+  document.title = `${title} | 青山学院大学 陸上競技部`;
+  document.getElementById("crumb").textContent = title;
+
+  const records = (store.ekidenRecordsByRound.get(roundId) || []).slice()
+    .sort((a, b) => a.interval - b.interval);
+  // 同一届可能有好几支队伍（奥球磨的 A / B）。队伍存在时，汇总时间和表都按队伍分开。
+  const byTeam = new Map();
+  for (const r of records) {
+    const id = r.teamId ?? 0;
+    if (!byTeam.has(id)) byTeam.set(id, []);
+    byTeam.get(id).push(r);
+  }
+  const multiTeam = byTeam.size > 1;
+  const itemName = item ? item.name : "";
+  const isHakone = /箱根駅伝/.test(itemName);
+  // 都道府県対抗男子駅伝などは、各選手が地元の都道府県チームで走るだけ（区間も重複する）ので
+  // 青学としての総合記録は存在しない。同じ区間に2人以上いる場合も同じ扱いにする。
+  const isTeamRelay = !/都道府県対抗|全国男子駅伝|全国都道府県/.test(itemName);
+  const dupInterval = (list) => {
+    const seen = new Set();
+    for (const r of list) { if (seen.has(r.interval)) return true; seen.add(r.interval); }
+    return false;
+  };
+  const totalOf = (list) =>
+    (isTeamRelay && list.length && !dupInterval(list))
+      ? list.reduce((n, r) => n + (r.seconds || 0), 0) : null;
+
+  const teamRanks = records.map((r) => r.teamRank).filter((x) => x != null);
+  const finalRank = (!multiTeam && teamRanks.length) ? teamRanks[teamRanks.length - 1] : null;
+  const awards = records.filter((r) => r.rank === 1).length;
+
+  const firstHalf = records.filter((r) => r.interval <= 5);
+  const secondHalf = records.filter((r) => r.interval >= 6);
+  const score = (sec) => (sec == null ? "—" : `<b class="time">${formatScore(sec, false)}</b>`);
+  let totalHtml = "";
+  if (records.length) {
+    if (multiTeam) totalHtml = ` ／ チーム別（${byTeam.size}チーム）に分けて集計`;
+    else if (isHakone) totalHtml = ` ／ 往路 ${score(totalOf(firstHalf))}`
+      + ` ／ 復路 ${score(totalOf(secondHalf))}`
+      + ` ／ 総合 ${score(totalOf(records))}`;
+    else if (totalOf(records) != null) totalHtml = ` ／ 総合記録 ${score(totalOf(records))}`;
+    else totalHtml = ` ／ 個人参加（青学としての総合記録なし）`;
+  }
+  // 同じ駅伝の他の回（第100回 → 第99回…）へすぐ飛べるようにする
+  const sameRounds = store.ekidenRounds
+    .filter((r) => r.ekidenItemId === round.ekidenItemId)
+    .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+  headEl.innerHTML = `<div class="page-head">
+    <h1>${esc(title)}</h1>
+    <p>${fmtDateFull(round.date)}
+      ${totalHtml}
+      ${finalRank ? ` ／ 総合順位 <b>${finalRank}位</b>` : ""}
+      ${awards ? ` ／ 区間賞 <b>${awards}</b>` : ""}
+    </p>
+  </div>` + (sameRounds.length > 1 ? `<section class="controls" style="margin-top:12px">
+    <div class="field">
+      <label>${esc(itemName)}の回</label>
+      <select id="editionPick">
+        ${sameRounds.map((r) => `<option value="${r.id}"${r.id === round.id ? " selected" : ""}>`
+          + `${esc(r.round)}${r.date ? `（${fmtDate(r.date)}）` : ""}${r.id === round.id ? " ← 表示中" : ""}</option>`).join("")}
+      </select>
+    </div>
+  </section>` : "");
+  const $edition = document.getElementById("editionPick");
+  if ($edition) $edition.addEventListener("change", () => {
+    location.href = `race.html?type=ekiden&id=${$edition.value}`;
+  });
+
+  if (!records.length) { bodyEl.innerHTML = `<div class="card empty">記録がありません</div>`; return; }
+
+  const hasTeamRank = records.some((r) => r.teamRank != null);
+  const hasDistance = records.some((r) => r.distance);
+
+  // カードの分け方：複数チーム→チームごと／箱根→往路・復路／それ以外→1枚
+  const sections = multiTeam
+    ? [...byTeam.entries()].map(([teamId, list]) => ({ title: store.teamName(teamId) || "チーム", list }))
+    : isHakone
+      ? [{ title: "往路（1〜5区）", list: firstHalf }, { title: "復路（6〜10区）", list: secondHalf }]
+      : [{ title: "区間成績", list: records }];
+
+  for (const sec of sections) {
+    const list = sec.list;
+    if (!list.length) continue;
+    const card = document.createElement("section");
+    card.className = "card pad-0";
+    card.style.marginBottom = "16px";
+    const t = totalOf(list);
+    const note = t != null
+      ? `<span class="hint">総合記録 <b class="time">${formatScore(t, false)}</b> ／ ${list.length}区間</span>`
+      : `<span class="hint">${list.length}区間（総合記録なし）</span>`;
+    card.innerHTML = `<div class="card-title" style="padding:16px 16px 0">
+      <h3>${esc(sec.title)}</h3>${note}</div>
+      <div class="body" style="padding:0 4px 8px"></div>`;
+    bodyEl.append(card);
+
+    renderTable(card.querySelector(".body"), [
+      { label: "区間", cls: "mid", render: (r) => `${r.interval}区` },
+      ...(hasDistance ? [{ label: "距離", cls: "num", render: (r) => esc(r.distance || "—") }] : []),
+      { label: "選手", cls: "name", render: (r) => {
+        const s = store.student(r.studentId);
+        return s ? `<a href="player.html?id=${s.id}">${esc(s.name)}</a>` : "—";
+      } },
+      { label: "学年", cls: "mid", render: (r) => gradeLabel(store.gradeOfRecord(r, store.student(r.studentId))) },
+      { label: "区間記録", cls: "num", render: (r) => `<span class="time">${scoreText(r)}</span>` },
+      { label: "区間順位", cls: "mid", render: (r) => r.rank
+        ? `<span class="badge ${r.rank === 1 ? "gold" : ""}">${r.rank}位</span>` : "—" },
+      ...(hasTeamRank ? [{ label: "チーム順位", cls: "mid", render: (r) => r.teamRank ? `${r.teamRank}位` : "—" }] : []),
+      { label: "備考", render: (r) => remarkBadge(r.remark) },
+    ], list);
+  }
+}
+</script>
+</body>
+</html>

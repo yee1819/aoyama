@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>部員一覧 | 青山学院大学 陸上競技部</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<header data-site-header></header>
+
+<main>
+  <div class="breadcrumb"><a href="index.html">概況</a> / 部員一覧</div>
+  <section class="page-head">
+    <h1>部員一覧</h1>
+    <p>現役・OB を含む登録選手の一覧。氏名・出身高校などで絞り込めます。</p>
+  </section>
+
+  <section class="controls">
+    <div class="field" style="flex:1;min-width:200px">
+      <label>検索（氏名・かな・英語・高校）</label>
+      <input type="search" id="q" placeholder="例：太田 / おおた / Ota">
+    </div>
+    <div class="field"><label>入学年</label><select id="year"></select></div>
+    <div class="field"><label>性別</label><select id="sex">
+      <option value="男">男子</option>
+      <option value="女">女子</option>
+      <option value="">すべて</option>
+    </select></div>
+    <div class="field"><label>学年</label><select id="grade">
+      <option value="">すべて</option>
+      <option value="1">1年</option><option value="2">2年</option>
+      <option value="3">3年</option><option value="4">4年</option>
+    </select></div>
+    <div class="field"><label>状態</label><select id="status">
+      <option value="active">在籍のみ</option>
+      <option value="">すべて</option>
+      <option value="left">退部・転向</option>
+      <option value="withdraw">退部のみ</option>
+    </select></div>
+    <div class="field"><label>出身高校</label><select id="school"></select></div>
+    <div class="field"><label>成績包含</label><select id="include">
+      <option value="all">全部成績（高校時代を含む）</option>
+      <option value="enrolled">在学中のみ</option>
+    </select></div>
+    <div class="field"><label>表示</label><select id="view">
+      <option value="card">カード</option>
+      <option value="table">テーブル</option>
+    </select></div>
+    <div class="field" style="align-self:flex-end"><button class="btn ghost" id="reset">リセット</button></div>
+  </section>
+
+  <p class="hint" id="count" style="color:var(--muted);font-size:12px;margin:-4px 0 12px"></p>
+  <div id="out"></div>
+</main>
+
+<footer data-site-footer></footer>
+
+<script type="module">
+import { loadStore, formatScore } from "./assets/store.js";
+import { mountLayout, setGeneratedAt, renderTable, avatarHTML, gradeLabel, fmtDate, qs, esc, attachSuggestions } from "./assets/ui.js";
+
+const store = await loadStore();
+mountLayout("players.html");
+setGeneratedAt(store.generatedAt);
+
+const today = new Date();
+const todayISO = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+const activeIds = new Set(store.rosterAsOf(todayISO).map((s) => s.id));
+
+// 筛选器选项
+const $year = document.getElementById("year");
+const years = [...new Set(store.students.map((s) => s.enrollmentYear).filter(Boolean))].sort().reverse();
+$year.innerHTML = `<option value="">すべて</option>` + years.map((y) => `<option value="${y}">${y}年</option>`).join("");
+$year.value = qs("year") || "";
+
+const $school = document.getElementById("school");
+const schools = [...store.schoolById.values()].sort((a, b) => (a.prefecture || "").localeCompare(b.prefecture || "") || a.name.localeCompare(b.name));
+$school.innerHTML = `<option value="">すべて</option>` + schools.map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join("");
+
+const refs = {
+  q: document.getElementById("q"),
+  year: $year,
+  grade: document.getElementById("grade"),
+  status: document.getElementById("status"),
+  school: $school,
+  sex: document.getElementById("sex"),
+  include: document.getElementById("include"),
+  view: document.getElementById("view"),
+};
+// 姓名候选词
+attachSuggestions(refs.q, store.students.map((s) => s.name));
+Object.values(refs).forEach((el) => el.addEventListener("input", render));
+document.getElementById("reset").onclick = () => {
+  refs.q.value = ""; refs.year.value = ""; refs.grade.value = ""; refs.status.value = "active"; refs.school.value = "";
+  refs.include.value = "all"; refs.sex.value = "男";
+  render();
+};
+
+const PB_ITEMS = ["five_5000m", "ten_10000m", "half_marathon"];
+
+function filterStudents() {
+  const q = refs.q.value.trim().toLowerCase();
+  const year = refs.year.value;
+  const grade = refs.grade.value;
+  const status = refs.status.value;
+  const schoolId = refs.school.value;
+  const sex = refs.sex.value;
+  return store.students.filter((s) => {
+    if (sex && (s.sex || "男") !== sex) return false;
+    if (year && s.enrollmentYear !== year) return false;
+    if (grade && String(store.gradeAt(s, todayISO) || "") !== grade) return false;
+    if (status === "active" && !activeIds.has(s.id)) return false;
+    if (status === "withdraw" && s.status !== "withdraw") return false;
+    if (status === "left" && (s.status || "player") === "player" && !s.leftDate) return false;
+    if (schoolId && String(s.highSchoolId) !== schoolId) return false;
+    if (q) {
+      const hay = [s.name, s.kanaName, s.englishName, store.schoolName(s.highSchoolId)].filter(Boolean).join(" ").toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  }).sort((a, b) => (b.enrollmentYear || "").localeCompare(a.enrollmentYear || "") || a.name.localeCompare(b.name, "ja"));
+}
+
+function render() {
+  const rows = filterStudents();
+  const out = document.getElementById("out");
+  out.textContent = "";
+  document.getElementById("count").textContent = `${rows.length} 名`;
+
+  if (refs.view.value === "table") {
+    renderTable(out, [
+      { label: "氏名", cls: "name", render: (r) => `<a href="player.html?id=${r.id}">${esc(r.name)}</a> ${sexBadge(r)}` },
+      { label: "かな", render: (r) => esc(r.kanaName || "—") },
+      { label: "入学", cls: "mid", render: (r) => r.enrollmentYear || "—" },
+      { label: "卒業", cls: "mid", render: (r) => r.graduationYear || "—" },
+      { label: "学年", cls: "mid", render: (r) => gradeLabel(store.gradeAt(r, todayISO)) },
+      { label: "出身高校", render: (r) => esc(store.schoolName(r.highSchoolId) || "—") },
+      { label: "状態", cls: "mid", render: (r) => statusBadge(r) },
+      ...PB_ITEMS.map((item) => ({
+        label: store.itemLabel(item), cls: "num",
+        render: (r) => {
+        const pb = store.pbAsOf(r.id, item, null, { include: refs.include.value });
+          return pb ? `<span class="time">${scoreText(pb)}</span>` : "—";
+        },
+      })),
+    ], rows, { empty: "条件に合う選手がいません" });
+  } else {
+    const grid = document.createElement("div");
+    grid.className = "player-grid";
+    if (!rows.length) {
+      out.innerHTML = `<div class="card empty">条件に合う選手がいません</div>`;
+      return;
+    }
+    for (const s of rows) {
+      const card = document.createElement("a");
+      card.className = "player-card";
+      card.href = `player.html?id=${s.id}`;
+      const pbs = PB_ITEMS.map((item) => {
+        const pb = store.pbAsOf(s.id, item, null, { include: refs.include.value });
+        return `<span>${store.itemLabel(item)}<b>${pb ? formatScore(pb.seconds, false) : "—"}</b></span>`;
+      }).join("");
+      card.innerHTML = `
+        <div class="top">
+          ${avatarHTML(s)}
+          <div>
+            <div class="nm">${esc(s.name)} ${sexBadge(s)}</div>
+            <div class="meta">${esc(s.kanaName || s.englishName || "")}</div>
+            <div class="meta">${esc(store.schoolName(s.highSchoolId) || "")}</div>
+          </div>
+        </div>
+        <div class="top" style="margin-top:8px;gap:6px">
+          <span class="badge ${activeIds.has(s.id) ? "green" : "dim"}">${activeIds.has(s.id) ? gradeLabel(store.gradeAt(s, todayISO)) || "在籍" : (s.graduationYear ? s.graduationYear + "年卒" : "OB")}</span>
+          ${s.position && s.position !== "none" ? `<span class="badge">${({ main: "主将", sub_main: "副主将", leader: "寮長" })[s.position]}</span>` : ""}
+        </div>
+        <div class="pbs">${pbs}</div>`;
+      grid.append(card);
+    }
+    out.append(grid);
+  }
+}
+
+function statusBadge(s) {
+  if (s.status === "withdraw") return `<span class="badge dim">退部</span>`;
+  if (s.status === "staff") return `<span class="badge">マネージャー</span>`;
+  if (s.leftDate) return `<span class="badge dim">退部（${String(s.leftDate).slice(0, 7)}）</span>`;
+  return activeIds.has(s.id) ? `<span class="badge green">在籍</span>` : `<span class="badge dim">OB</span>`;
+}
+
+const sexBadge = (s) => (s.sex || "男") === "女" ? `<span class="badge pink">女子</span>` : "";
+
+render();
+</script>
+</body>
+</html>

@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>青山学院大学 陸上競技部 データベース</title>
+<meta name="description" content="青山学院大学陸上競技部の選手成績・大会記録・時点別ランキングを閲覧できる個人ファンサイト">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<header data-site-header></header>
+
+<main>
+  <section class="page-head">
+    <h1>チーム概況</h1>
+    <p>選手・大会・記録をワンストップで。過去の任意の日付時点のランキングも見られます。</p>
+  </section>
+
+  <section class="grid cols-4" id="stats" style="margin-bottom:18px">
+    <div class="card stat"><span class="label">在籍部員</span><span class="value" data-stat="roster">—</span></div>
+    <div class="card stat"><span class="label">登録選手（歴代）</span><span class="value" data-stat="students">—</span></div>
+    <div class="card stat"><span class="label">収録レース</span><span class="value" data-stat="races">—</span></div>
+    <div class="card stat"><span class="label">収録記録</span><span class="value" data-stat="records">—</span></div>
+  </section>
+
+  <section class="card" style="margin-bottom:18px">
+    <div class="card-title">
+      <h3>時点ランキング（タイムマシン）</h3>
+      <span class="hint">例：2022年10月1日時点の5000m順位</span>
+    </div>
+    <div class="controls" style="box-shadow:none;border:0;padding:0;margin:0">
+      <div class="field">
+        <label>日付</label>
+        <input type="date" id="goDate">
+      </div>
+      <div class="field">
+        <label>種目</label>
+        <select id="goItem"></select>
+      </div>
+      <button class="btn" id="goBtn">その時点を見る</button>
+      <div class="field">
+        <label>よく使う時点</label>
+        <div class="quick-dates" id="quickDates"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" style="margin-bottom:14px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+    <span style="font-size:12px;font-weight:700;color:var(--muted)">現役ランキング</span>
+    <div class="pill-row" id="topSex">
+      <button class="btn ghost active" data-sex="男">男子</button>
+      <button class="btn ghost" data-sex="女">女子</button>
+    </div>
+    <span class="hint" style="color:var(--muted);font-size:12px">種目は性別に合わせて自動で切り替わります</span>
+  </section>
+  <section class="grid cols-3" style="margin-bottom:18px" id="topLists"></section>
+
+  <section class="grid cols-2">
+    <div class="card">
+      <div class="card-title"><h3>最近の大会</h3><a href="races.html" class="hint">全部見る →</a></div>
+      <div class="list-rows" id="recentRaces"></div>
+    </div>
+    <div class="card">
+      <div class="card-title"><h3>最新記録</h3><span class="hint">直近の好記録</span></div>
+      <div class="list-rows" id="recentRecords"></div>
+    </div>
+  </section>
+
+  <p class="footnote">
+    本サイトは個人が運営する非公式ファンサイトです。記録は公開情報を基に作成していますが、
+    誤りが含まれる可能性があります。データの最終更新は <span data-generated-at>—</span> です。
+  </p>
+</main>
+
+<footer data-site-footer></footer>
+
+<script type="module">
+import { loadStore, ITEM_ORDER, formatScore, formatDiff, scoreText } from "./assets/store.js";
+import { mountLayout, setGeneratedAt, renderTable, fmtDate, fmtDateCell, fmtDateFull, qs } from "./assets/ui.js";
+
+mountLayout("index.html");
+const store = await loadStore();
+setGeneratedAt(store.generatedAt);
+
+const today = new Date();
+const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const todayISO = iso(today);
+
+// --- 概览数字 ---
+const roster = store.rosterAsOf(todayISO);
+document.querySelector('[data-stat="roster"]').innerHTML = `${roster.length}<small>人</small>`;
+document.querySelector('[data-stat="students"]').innerHTML = `${store.students.length}<small>人</small>`;
+document.querySelector('[data-stat="races"]').innerHTML =
+  `${store.competitions.length + store.ekidenRounds.length}<small>件</small>`;
+document.querySelector('[data-stat="records"]').innerHTML =
+  `${store.records.length + store.ekidenRecords.length}<small>件</small>`;
+
+// --- 时点查询控件 ---
+const itemSelect = document.getElementById("goItem");
+const itemKeys = ITEM_ORDER.filter((k) => store.records.some((r) => r.item === k));
+itemSelect.innerHTML = itemKeys.map((k) => `<option value="${k}">${store.itemLabel(k)}</option>`).join("");
+itemSelect.value = itemKeys.includes("five_5000m") ? "five_5000m" : itemKeys[0];
+
+const dateInput = document.getElementById("goDate");
+dateInput.value = todayISO;
+dateInput.max = todayISO;
+document.getElementById("goBtn").addEventListener("click", () => {
+  if (!dateInput.value) return;
+  location.href = `rankings.html?date=${dateInput.value}&item=${itemSelect.value}`;
+});
+
+// 快捷时点：每年 1/1 与 10/1（驿传季前后）
+const quick = document.getElementById("quickDates");
+const span = store.rosterSpan;
+const quickDates = [];
+for (let y = (span.max || today.getFullYear()); y >= (span.min || 2015); y--) {
+  quickDates.push(`${y}-10-01`, `${y}-01-01`);
+}
+for (const d of quickDates.slice(0, 8)) {
+  const a = document.createElement("button");
+  a.className = "btn ghost";
+  a.textContent = d.slice(2, 7).replace("-", "/");
+  a.addEventListener("click", () => location.href = `rankings.html?date=${d}&item=${itemSelect.value}`);
+  quick.append(a);
+}
+
+// --- 现役 TOP10（男女各自的项目） ---
+const TOP_ITEMS = {
+  "男": ["five_5000m", "ten_10000m", "half_marathon"],
+  "女": ["fifteen_1500m", "three_3000m", "five_5000m", "ten_10000m", "half_marathon"],
+};
+const topLists = document.getElementById("topLists");
+let topSex = "男";
+
+function renderTop() {
+  topLists.textContent = "";
+  for (const item of TOP_ITEMS[topSex]) {
+    if (!store.records.some((r) => r.item === item)) continue;
+    const rows = store.rankingAsOf(todayISO, item, { scope: "active", limit: 10, sex: topSex });
+    if (!rows.length) continue;
+    const card = document.createElement("div");
+    card.className = "card pad-0";
+    card.innerHTML = `<div class="card-title" style="padding:16px 16px 0"><h3>現役${topSex === "女" ? "女子" : "男子"} ${store.itemLabel(item)}</h3>
+      <a class="hint" href="rankings.html?date=${todayISO}&item=${item}&sex=${topSex}">詳細 →</a></div>
+      <div style="padding:0 4px 8px"></div>`;
+    topLists.append(card);
+    renderTable(card.querySelector("div:last-child"), [
+      { label: "#", cls: "mid", render: (r) => `<span class="rank">${r.rank}</span>` },
+      { label: "選手", cls: "name", render: (r) => `<a href="player.html?id=${r.student.id}">${r.student.name}</a>` },
+      { label: "学年", cls: "mid", render: (r) => r.grade ? r.grade + "年" : "—" },
+      { label: "記録", cls: "num", render: (r) => `<span class="time">${scoreText(r.record)}</span>` },
+      { label: "樹立日", cls: "num", render: (r) => fmtDateCell(r.record, r.student) },
+    ], rows);
+  }
+  if (!topLists.children.length) topLists.innerHTML = `<div class="card empty">記録がありません</div>`;
+}
+document.querySelectorAll("#topSex [data-sex]").forEach((b) => {
+  b.addEventListener("click", () => {
+    topSex = b.dataset.sex;
+    document.querySelectorAll("#topSex [data-sex]").forEach((x) => x.classList.toggle("active", x === b));
+    renderTop();
+  });
+});
+renderTop();
+
+// --- 最近大会 ---
+const racesEl = document.getElementById("recentRaces");
+const recent = [
+  ...store.competitions.map((c) => ({ kind: "大会", ...c })),
+  ...store.ekidenRounds.map((r) => ({
+    kind: "駅伝",
+    id: r.id,
+    name: (store.ekidenItemById.get(r.ekidenItemId)?.name || "駅伝") + " " + r.round,
+    date: r.date,
+  })),
+].sort((a, b) => (b.date || "").localeCompare(a.date || "")).slice(0, 8);
+
+if (recent.length) {
+  recent.forEach((r) => {
+    const href = r.kind === "駅伝" ? `race.html?type=ekiden&id=${r.id}` : `race.html?type=competition&id=${r.id}`;
+    const row = document.createElement("a");
+    row.className = "row-item";
+    row.href = href;
+    row.innerHTML = `<span class="date">${fmtDate(r.date)}</span>
+      <span class="txt">${r.name}</span>
+      <span class="badge ${r.kind === "駅伝" ? "green" : ""}">${r.kind}</span>`;
+    racesEl.append(row);
+  });
+} else {
+  racesEl.innerHTML = `<div class="empty">大会データがありません</div>`;
+}
+
+// --- 最新记录 ---
+const recEl = document.getElementById("recentRecords");
+const recentRecords = store.records
+  .filter((r) => r.date && r.seconds != null && r.rank != null && r.rank <= 8)
+  .sort((a, b) => (b.date || "").localeCompare(a.date || "") || a.seconds - b.seconds)
+  .slice(0, 10);
+if (recentRecords.length) {
+  recentRecords.forEach((r) => {
+    const s = store.student(r.studentId);
+    const row = document.createElement("a");
+    row.className = "row-item";
+    row.href = `race.html?type=competition&id=${r.competitionId}`;
+    row.innerHTML = `<span class="date">${fmtDate(r.date)}</span>
+      <span class="txt">${s ? s.name : "—"} <span class="badge dim">${store.itemLabel(r.item)}</span></span>
+      <span class="time">${scoreText(r)}</span>
+      <span class="badge ${r.rank === 1 ? "gold" : ""}">${r.rank}位</span>`;
+    recEl.append(row);
+  });
+} else {
+  recEl.innerHTML = `<div class="empty">記録がありません</div>`;
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,697 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>自己ベスト（年間） | 青山学院大学 陸上競技部</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<header data-site-header></header>
+
+<main>
+  <div class="breadcrumb"><a href="index.html">概況</a> / 自己ベスト</div>
+  <section class="page-head">
+    <h1>自己ベスト</h1>
+    <p>選手ごとの「高校 → 1年 → 2年 → 3年 → 4年」のベスト推移。入学年ごとのまとめ、学年ごとの世代対決、チーム平均の推移も見られます。</p>
+  </section>
+
+  <section class="controls">
+    <div class="field">
+      <label>性別</label>
+      <div class="pill-row" id="sexTabs"></div>
+    </div>
+    <div class="field">
+      <label>表示</label>
+      <select id="view">
+        <option value="list">一覧（種目別テーブル）</option>
+        <option value="year">入学年サマリー（世代）</option>
+        <option value="gen">学年別（世代対決）</option>
+        <option value="avg">全チーム平均の推移</option>
+      </select>
+    </div>
+    <div class="field" id="itemField">
+      <label>種目</label>
+      <select id="item"></select>
+    </div>
+    <div class="field" id="scopeField">
+      <label>対象</label>
+      <select id="scope">
+        <option value="player">退部・転向を除く</option>
+        <option value="active">現役のみ</option>
+        <option value="all">全員（退部・転向も含む）</option>
+      </select>
+    </div>
+    <div class="field" id="yearField">
+      <label>入学年</label>
+      <select id="year"></select>
+    </div>
+    <div class="field" id="qField" style="flex:1;min-width:160px">
+      <label>検索</label>
+      <input type="search" id="q" placeholder="氏名で検索">
+    </div>
+    <div class="field">
+      <label>成績包含</label>
+      <select id="include">
+        <option value="all">全部成績</option>
+        <option value="enrolled">在学中のみ</option>
+      </select>
+    </div>
+    <div class="field" id="genSortField" hidden>
+      <label>並べ替え</label>
+      <select id="genSort"></select>
+    </div>
+    <div class="field" id="avgScopeField" hidden>
+      <label>平均の取り方</label>
+      <select id="avgScope">
+        <option value="6">上位6名平均</option>
+        <option value="8">上位8名平均</option>
+        <option value="10">上位10名平均</option>
+        <option value="16">上位16名平均</option>
+        <option value="0" selected>全員平均</option>
+      </select>
+    </div>
+    <div class="field" id="avgItemsField" hidden>
+      <label>項目（複数可）</label>
+      <div class="pill-row" id="avgItems"></div>
+    </div>
+    <div class="field" id="avgPeriodField" hidden>
+      <label>期間</label>
+      <select id="avgPeriod">
+        <option value="0" selected>全期間</option>
+        <option value="10">直近10年度</option>
+        <option value="5">直近5年度</option>
+        <option value="3">直近3年度</option>
+      </select>
+    </div>
+    <div class="field" id="avgBaseField" hidden>
+      <label>平均の基準</label>
+      <select id="avgBase">
+        <option value="pb" selected>自己ベスト（その時点）</option>
+        <option value="season">その年度のベスト</option>
+      </select>
+    </div>
+  </section>
+
+  <p class="hint" style="color:var(--muted);font-size:12px;margin:-4px 0 12px" id="count"></p>
+  <div id="out"></div>
+</main>
+
+<footer data-site-footer></footer>
+
+<script type="module">
+import { loadStore, formatScore, ITEM_LABELS, currentAcademicYear, academicYear, isHighSchoolRecord, scoreText } from "./assets/store.js";
+import { mountLayout, setGeneratedAt, renderTable, gradeLabel, fmtDateCell, esc, qs } from "./assets/ui.js";
+import { lineChart } from "./assets/charts.js";
+import { t } from "./assets/i18n.js";
+
+const store = await loadStore();
+mountLayout("best.html");
+setGeneratedAt(store.generatedAt);
+
+const today = new Date();
+const todayISO = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+const activeIds = new Set(store.rosterAsOf(todayISO).map((s) => s.id));
+const CUR_AY = currentAcademicYear();
+
+const ITEMS_BY_SEX = {
+  // 男生看这三项；女生看五项（后面女生多了也只扩展这里）
+  "男": ["five_5000m", "ten_10000m", "half_marathon"],
+  "女": ["fifteen_1500m", "three_3000m", "five_5000m", "ten_10000m", "half_marathon"],
+};
+// 学年の並び。0 = 高校時代（入学前）
+const COLS = ["高校", "1年", "2年", "3年", "4年"];
+
+const $ = (id) => document.getElementById(id);
+const $sexTabs = $("sexTabs"), $view = $("view"), $scope = $("scope"), $year = $("year");
+const $q = $("q"), $include = $("include"), $item = $("item"), $out = $("out"), $count = $("count");
+const $genSort = $("genSort"), $avgScope = $("avgScope"), $avgItems = $("avgItems"), $avgPeriod = $("avgPeriod");
+const $avgBase = $("avgBase");
+const $itemField = $("itemField"), $scopeField = $("scopeField"), $yearField = $("yearField"), $qField = $("qField");
+const $avgItemsField = $("avgItemsField"), $avgScopeField = $("avgScopeField"), $avgPeriodField = $("avgPeriodField");
+const $avgBaseField = $("avgBaseField");
+const $genSortField = $("genSortField");
+
+let sex = qs("sex") === "女" ? "女" : "男";
+let sort = { key: null, dir: 1 };
+let genSortGrade = 4;
+let genDetail = null;          // 世代対決でクリックした「世代 × 学年」
+let avgItemsSel = new Set();
+
+$view.value = qs("view") || "list";
+$scope.value = ["all", "active"].includes(qs("scope")) ? qs("scope") : "player";
+$include.value = qs("include") === "enrolled" ? "enrolled" : "all";
+
+const mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+/** 秒 → 「13:45.67」/「1:02:33.45」（小数第2位まで必ず出す） */
+function fmtSec2(sec) {
+  if (sec == null || !Number.isFinite(sec)) return "—";
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  return (h ? `${h}:${String(m).padStart(2, "0")}` : String(m)) + ":" + s.toFixed(2).padStart(5, "0");
+}
+/** 成绩单元格 → 有对应大会的话点进大会详情页 */
+function recCell(rec, inner) {
+  if (!rec) return `<span style="color:var(--line)">—</span>`;
+  if (!rec.competitionId) return inner;
+  const title = rec.competitionName ? ` title="${esc(rec.competitionName)}"` : "";
+  return `<a href="race.html?type=competition&id=${rec.competitionId}"${title}>${inner}</a>`;
+}
+/** 上位 N 名的平均值（N=0 表示全员平均） */
+function avgTop(values, topN) {
+  if (!values.length) return null;
+  const v = values.slice().sort((a, b) => a - b);
+  return mean(topN > 0 ? v.slice(0, topN) : v);
+}
+/**
+ * 该选手在 ay 年度（4/1〜翌3/31）里该项目的最好成绩。
+ * 高校時代の記録（入学前）はチームの年度成績ではないので数えない。
+ */
+function seasonBest(s, item, ay, cache) {
+  const from = `${ay}-04-01`, to = `${ay + 1}-03-31`;
+  const list = cache.get(s.id) || [];
+  let best = null;
+  for (const r of list) {
+    if (r.item !== item || r.isFinished === false || r.seconds == null) continue;
+    if (isHighSchoolRecord(r, s)) continue;
+    if (!r.date || r.date < from || r.date > to) continue;
+    if (!best || r.seconds < best.seconds) best = r;
+  }
+  return best;
+}
+
+/**
+ * その年度末までに記録した「自己ベスト」（＝歴代のベスト）。
+ * その年度に走っていなくても、それ以前のベストを持っていればそれを使う。
+ */
+function pbAsOf(s, item, ay, cache) {
+  const to = `${ay + 1}-03-31`;
+  const list = cache.get(s.id) || [];
+  let best = null;
+  for (const r of list) {
+    if (r.item !== item || r.isFinished === false || r.seconds == null) continue;
+    if ($include.value === "enrolled" && isHighSchoolRecord(r, s)) continue;
+    if (!r.date || r.date > to) continue;
+    if (!best || r.seconds < best.seconds) best = r;
+  }
+  return best;
+}
+function rosterOfYear(ay) {
+  const end = `${ay + 1}-03-31`;
+  return store.students.filter((s) => {
+    if ((s.sex || "男") !== sex) return false;   // ← 男子/女子タブの絞り込みが抜けていた
+    const en = Number(s.enrollmentYear);
+    if (!en) return false;
+    const gr = Number(s.graduationYear) || en + 4;
+    if (!(en <= ay && ay < gr)) return false;
+    if ($scope.value === "all") return true;
+    // 「退部・転向を除く」は、その年度末時点でまだ選手だった人だけを数える
+    if ($scope.value === "active") return activeIds.has(s.id);
+    return store.isPlayerAt(s, end);
+  });
+}
+
+function renderSexTabs() {
+  const n = (k) => store.studentsBySex(k).length;
+  $sexTabs.innerHTML = ["男", "女"].map((k) =>
+    `<button class="btn ghost ${k === sex ? "active" : ""}" data-sex="${k}">${k === "男" ? "男子" : "女子"} <span style="opacity:.6">${n(k)}</span></button>`
+  ).join("");
+  $sexTabs.querySelectorAll("[data-sex]").forEach((b) =>
+    b.addEventListener("click", () => {
+      sex = b.dataset.sex; sort = { key: null, dir: 1 }; avgItemsSel = new Set();
+      renderSexTabs(); fillItems(); fillYears(); fillAvgItems(); render();
+    }));
+}
+
+function fillItems() {
+  const cur = $item.value;
+  $item.innerHTML = `<option value="">すべて</option>`
+    + ITEMS_BY_SEX[sex].map((k) => `<option value="${k}">${ITEM_LABELS[k]}</option>`).join("");
+  if ([...$item.options].some((o) => o.value === cur)) $item.value = cur;
+}
+
+/** 单选视图需要一个具体项目："すべて" 时退回第一个 */
+function currentItem() {
+  return $item.value || ITEMS_BY_SEX[sex][0];
+}
+
+function fillYears() {
+  const years = [...new Set(store.studentsBySex(sex).map((s) => s.enrollmentYear).filter(Boolean))].sort().reverse();
+  const cur = $year.value;
+  $year.innerHTML = `<option value="">すべて</option>` + years.map((y) => `<option value="${y}">${y}年</option>`).join("");
+  if (years.includes(cur)) $year.value = cur;
+}
+
+function fillGenSort() {
+  $genSort.innerHTML = COLS.map((c, i) => `<option value="${i}" ${i === genSortGrade ? "selected" : ""}>${c}時点の平均順</option>`).join("");
+}
+
+function fillAvgItems() {
+  const items = ITEMS_BY_SEX[sex];
+  if (!avgItemsSel.size) avgItemsSel = new Set(items);
+  for (const k of [...avgItemsSel]) if (!items.includes(k)) avgItemsSel.delete(k);
+  if (!avgItemsSel.size) avgItemsSel.add(items[0]);
+  $avgItems.innerHTML = items.map((k) =>
+    `<button class="btn ghost ${avgItemsSel.has(k) ? "active" : ""}" data-item="${k}">${ITEM_LABELS[k]}</button>`).join("");
+  $avgItems.querySelectorAll("[data-item]").forEach((b) =>
+    b.addEventListener("click", () => {
+      const k = b.dataset.item;
+      if (avgItemsSel.has(k)) { if (avgItemsSel.size > 1) avgItemsSel.delete(k); } else avgItemsSel.add(k);
+      fillAvgItems(); render();
+    }));
+}
+
+function filtered() {
+  let list = scoped(store.studentsBySex(sex));
+  if ($year.value) list = list.filter((s) => s.enrollmentYear === $year.value);
+  const q = $q.value.trim().toLowerCase();
+  if (q) list = list.filter((s) => (s.name + (s.kanaName || "")).toLowerCase().includes(q));
+  return list;
+}
+
+/**
+ * 「対象」筛选：
+ *   player（既定）＝ 退部・マネージャー転向した人を除く（OB は含む）
+ *   active        ＝ いま在籍している選手だけ
+ *   all           ＝ 退部・転向も含めた全員
+ */
+function scoped(list) {
+  const scope = $scope.value;
+  if (scope === "all") return list;
+  if (scope === "active") return list.filter((s) => activeIds.has(s.id));
+  return list.filter((s) => (s.status || "player") === "player" && !s.leftDate);
+}
+
+// ---------- 视图 1：一覧（种目别表格，带排名）----------
+function renderList(students) {
+  const items = $item.value ? [$item.value] : ITEMS_BY_SEX[sex];
+  const flat = [];
+  for (const s of students) {
+    const yb = store.yearBests(s.id, { include: $include.value });
+    for (const item of items) {
+      const row = yb.get(item);
+      if (!row) continue;
+      const best = Object.values(row).reduce((m, r) => (!m || r.seconds < m.seconds ? r : m), null);
+      flat.push({ item, student: s, cells: row, best });
+    }
+  }
+
+  const colIdx = sort.key && sort.key.startsWith("col:") ? Number(sort.key.slice(4)) : null;
+  const secOf = (r) => (r && r.seconds != null ? r.seconds : Infinity);
+  const cmp = (a, b) => {
+    if (sort.key === "name") return sort.dir * a.student.name.localeCompare(b.student.name, "ja");
+    if (sort.key === "year") return sort.dir * String(a.student.enrollmentYear).localeCompare(String(b.student.enrollmentYear));
+    if (sort.key === "best") return sort.dir * (secOf(a.best) - secOf(b.best));
+    if (colIdx !== null) {
+      const ra = a.cells[colIdx], rb = b.cells[colIdx];
+      if (!ra && !rb) return 0;
+      if (!ra) return 1;           // 无成绩的排最后
+      if (!rb) return -1;
+      return sort.dir * (ra.seconds - rb.seconds);
+    }
+    // 默认：4年間ベストの速い順
+    return secOf(a.best) - secOf(b.best)
+      || a.student.name.localeCompare(b.student.name, "ja");
+  };
+  flat.sort(cmp);
+
+  for (const item of items) {
+    const rows = flat.filter((r) => r.item === item);
+    if (!rows.length) continue;
+    rows.forEach((r, i) => { r.rank = i + 1; });
+    const card = document.createElement("section");
+    card.className = "card pad-0";
+    card.style.marginBottom = "16px";
+    card.innerHTML = `<div class="card-title" style="padding:16px 16px 0">
+      <h3>${ITEM_LABELS[item]}</h3>
+      <span class="hint">${rows.length} 名 ／ 見出しをクリックで並べ替え</span></div>
+      <div class="body" style="padding:0 4px 8px"></div>`;
+    $out.append(card);
+
+    renderTable(card.querySelector(".body"), [
+      { label: "#", cls: "mid", render: (r) => `<span class="rank">${r.rank}</span>` },
+      { label: "選手", cls: "name", sortKey: "name", render: (r) =>
+        `<a href="player.html?id=${r.student.id}">${esc(r.student.name)}</a>`
+        + ((r.student.sex || "男") === "女" ? ` <span class="badge pink">女子</span>` : "") },
+      { label: "入学年", cls: "mid", sortKey: "year", render: (r) => r.student.enrollmentYear || "—" },
+      { label: "現役", cls: "mid", render: (r) => activeIds.has(r.student.id)
+        ? `<span class="badge green">${gradeLabel(store.gradeAt(r.student, todayISO)) || "在籍"}</span>`
+        : `<span class="badge dim">OB</span>` },
+      ...COLS.map((label, idx) => ({
+        label, cls: "num", sortKey: "col:" + idx,
+        render: (r) => {
+          const rec = r.cells[idx];
+          if (!rec) return `<span style="color:var(--line)">—</span>`;
+          const isBest = r.best && rec.id === r.best.id;
+          return recCell(rec, `<span class="time${isBest ? " pb-cell" : ""}">${scoreText(rec)}</span>`);
+        },
+      })),
+      { label: "ベスト", cls: "num", sortKey: "best", render: (r) => r.best
+        ? recCell(r.best, `<span class="time"><b>${scoreText(r.best)}</b></span>`) : "—" },
+    ], rows, { onSort: (key) => {
+      sort = { key, dir: sort.key === key ? -sort.dir : 1 };
+      render();
+    }, sortState: sort });
+  }
+}
+
+// ---------- 视图 2：入学年サマリー（世代）----------
+function renderYear(students) {
+  const item = currentItem();
+  const years = [...new Set(students.map((s) => s.enrollmentYear).filter(Boolean))].sort().reverse();
+  if (!years.length) { $out.innerHTML = `<div class="card empty">データがありません</div>`; return; }
+  if (!$year.value || !years.includes($year.value)) $year.value = years[0];
+  const year = $year.value;
+  const list = students.filter((s) => s.enrollmentYear === year);
+
+  const rows = list.map((s) => {
+    const yb = store.yearBests(s.id, { include: $include.value });
+    const row = yb.get(item) || {};
+    const best = Object.values(row).reduce((m, r) => (!m || r.seconds < m.seconds ? r : m), null);
+    return { student: s, cells: row, best };
+  }).sort((a, b) => (a.best ? a.best.seconds : Infinity) - (b.best ? b.best.seconds : Infinity)
+    || a.student.name.localeCompare(b.student.name, "ja"));
+  rows.forEach((r, i) => { r.rank = i + 1; });
+
+  // 各学年の全員平均（小数第2位まで）
+  const foot = COLS.map((_, idx) => {
+    const vals = rows.map((r) => r.cells[idx]).filter(Boolean).map((r) => r.seconds);
+    return vals.length ? { avg: avgTop(vals, 0), n: vals.length } : null;
+  });
+  // 「ベスト」列（4年間のベスト）の全員平均
+  const bestAvg = avgTop(rows.map((r) => r.best).filter(Boolean).map((r) => r.seconds), 0);
+
+  const head = `<div class="card" style="margin-bottom:16px">
+    <div class="card-title"><h3>${year}年入学 ${ITEM_LABELS[item] || item}</h3>
+      <span class="hint">${rows.length} 名 ／ 入学後の自己ベストは高校の記録とは別にスタート</span></div>
+    <div class="table-wrap"><table class="data compact">
+      <thead><tr><th>#</th><th>選手</th><th>現役</th>${COLS.map((c) => `<th class="num">${c}</th>`).join("")}<th class="num">ベスト</th></tr></thead>
+      <tbody>${rows.map((r) => `<tr>
+        <td class="mid"><span class="rank">${r.rank}</span></td>
+        <td><a href="player.html?id=${r.student.id}">${esc(r.student.name)}</a></td>
+        <td class="mid">${activeIds.has(r.student.id) ? `<span class="badge green">${gradeLabel(store.gradeAt(r.student, todayISO)) || "在籍"}</span>` : `<span class="badge dim">OB</span>`}</td>
+        ${COLS.map((_, idx) => {
+          const rec = r.cells[idx];
+          if (!rec) return `<td class="num"><span style="color:var(--line)">—</span></td>`;
+          const isBest = r.best && rec.id === r.best.id;
+          return `<td class="num">${recCell(rec, `<span class="time${isBest ? " pb-cell" : ""}">${scoreText(rec)}</span>`)}</td>`;
+        }).join("")}
+        <td class="num">${r.best ? recCell(r.best, `<span class="time"><b>${scoreText(r.best)}</b></span>`) : "—"}</td>
+      </tr>`).join("")}</tbody>
+      <tfoot><tr><td></td><td colspan="2" style="color:var(--muted);font-size:12px">${t("全員平均", "全员平均")}</td>
+        ${foot.map((f) => `<td class="num"><span class="time" style="color:var(--muted)">${f ? fmtSec2(f.avg) : "—"}</span></td>`).join("")}
+        <td class="num"><span class="time" style="color:var(--muted)">${bestAvg != null ? fmtSec2(bestAvg) : "—"}</span></td>
+        </tr></tfoot>
+    </table></div></div>`;
+  $out.innerHTML = head;
+
+  // 该世代的推移：一人一条线 ＋ 上位5名平均
+  const series = rows.map((r) => ({
+    name: r.student.name,
+    points: COLS.map((c, i) => (r.cells[i] ? { x: c, y: r.cells[i].seconds, meta: r.cells[i] } : null)).filter(Boolean),
+  })).filter((s) => s.points.length);
+  const avgPoints = COLS.map((c, i) => (foot[i] ? { x: c, y: foot[i].avg, n: foot[i].n } : null)).filter(Boolean);
+  if (avgPoints.length) series.push({ name: t("全員平均", "全员平均"), points: avgPoints, dashed: true, color: "#111827" });
+
+  const card = document.createElement("section");
+  card.className = "card";
+  card.innerHTML = `<div class="card-title"><h3>${year}年入学 ${ITEM_LABELS[item] || item}${t(" の推移", " 的变化")}</h3>
+    <span class="hint">${series.length - (avgPoints.length ? 1 : 0)} 名 ／ 1本の線が1人の学年ベスト</span></div>
+    <div id="yearChart"></div>`;
+  $out.append(card);
+  lineChart(card.querySelector("#yearChart"), {
+    series, xMode: "category", categories: COLS,
+    formatX: (c) => c, formatY: (v) => formatScore(v, false), maxLegend: 14,
+    tooltip: (p) => `<div style="opacity:.7">${p.x}</div><div><b>${formatScore(p.y)}</b></div>
+      ${p.meta && p.meta.competitionName ? `<div style="opacity:.7">${esc(p.meta.competitionName)}</div>` : ""}
+      ${p.n ? `<div style="opacity:.7">${p.n}名の平均</div>` : ""}`,
+    emptyText: "自己ベスト更新の記録がありません",
+  });
+}
+
+// ---------- 视图 3：学年别（世代对决）----------
+function renderGen(students) {
+  const item = currentItem();
+  const years = [...new Set(students.map((s) => s.enrollmentYear).filter(Boolean))].sort().reverse();
+  if (!years.length) { $out.innerHTML = `<div class="card empty">データがありません</div>`; return; }
+
+  // 世代 × 学年 の平均（平均の取り方は上のセレクトと同じ）と、学年ごとの順位
+  const topN = Number($avgScope.value);
+  const avgLabel = topN > 0 ? t(`上位${topN}名平均`, `前${topN}名平均`) : t("全員平均", "全员平均");
+  const stat = new Map();   // `${year}|${grade}` -> {avg, n, rank}
+  const size = new Map();   // year -> 人数
+  for (const y of years) {
+    const members = students.filter((s) => s.enrollmentYear === y);
+    size.set(y, members.length);
+    const bests = members.map((s) => store.yearBests(s.id, { include: $include.value }).get(item) || {});
+    for (let g = 0; g < COLS.length; g++) {
+      // その世代のメンバーを「その学年のベスト」で速い順に並べる
+      const ranked = bests
+        .map((row, i) => (row[g] ? { s: members[i], rec: row[g] } : null))
+        .filter(Boolean)
+        .sort((a, b) => a.rec.seconds - b.rec.seconds);
+      const vals = ranked.map((x) => x.rec.seconds);
+      stat.set(`${y}|${g}`, vals.length
+        ? {
+          avg: avgTop(vals, topN),
+          n: topN > 0 ? Math.min(topN, vals.length) : vals.length,
+          total: vals.length,
+          ranked,
+        }
+        : null);
+    }
+  }
+  for (let g = 0; g < COLS.length; g++) {
+    const arr = years.map((y) => ({ y, v: stat.get(`${y}|${g}`) })).filter((x) => x.v)
+      .sort((a, b) => a.v.avg - b.v.avg);
+    arr.forEach((x, i) => { x.v.rank = i + 1; });
+  }
+
+  const ordered = years.slice().sort((a, b) => {
+    const sa = stat.get(`${a}|${genSortGrade}`), sb = stat.get(`${b}|${genSortGrade}`);
+    if (!sa && !sb) return b.localeCompare(a);
+    if (!sa) return 1;
+    if (!sb) return -1;
+    return sa.avg - sb.avg;
+  });
+  const badge = (rk) => rk === 1 ? `<span class="badge gold">1位</span>`
+    : rk === 2 ? `<span class="badge silver">2位</span>`
+    : rk === 3 ? `<span class="badge bronze">3位</span>` : "";
+
+  const table = `<div class="card pad-0" style="margin-bottom:16px">
+    <div class="card-title" style="padding:16px 16px 0">
+      <h3>${ITEM_LABELS[item] || item} ${t("学年別", "按学年")} ${avgLabel}</h3>
+      <span class="hint">${t("世代＝入学年 ／ 見出し（高校・1年…）をクリックでその学年の平均順に並べ替え", "世代＝入学年份 ／ 点击表头（高中・1 年…）按该学年的平均排序")}</span></div>
+    <div class="table-wrap"><table class="data compact">
+      <thead><tr><th>入学年</th><th class="num">人数</th>
+        ${COLS.map((c, i) => `<th class="num sortable${i === genSortGrade ? " sorted" : ""}" data-grade="${i}"
+          title="${t("クリックでこの学年の平均順に並べ替え", "点击按该学年的平均排序")}">${c}<span class="sort-ind">${i === genSortGrade ? "▲" : "⇅"}</span></th>`).join("")}</tr></thead>
+      <tbody>${ordered.map((y) => `<tr${y === ordered[0] ? ` class="r1"` : ""}>
+        <td><b>${y}年</b></td><td class="num">${size.get(y) || 0}</td>
+        ${COLS.map((c, g) => {
+          const v = stat.get(`${y}|${g}`);
+          if (!v) return `<td class="num"><span style="color:var(--line)">—</span></td>`;
+          return `<td class="num"><span class="time">${formatScore(v.avg, false)}</span> ${badge(v.rank)}
+            <button type="button" class="btn ghost mini" data-genyear="${y}" data-gengrade="${g}"
+              title="${t("この学年のランキングを見る", "查看该学年的排行")}">${v.n}名</button></td>`;
+        }).join("")}</tr>`).join("")}</tbody>
+    </table></div></div>`;
+  $out.innerHTML = table;
+  $out.querySelectorAll("th[data-grade]").forEach((th) =>
+    th.addEventListener("click", () => {
+      genSortGrade = Number(th.dataset.grade);
+      $genSort.value = String(genSortGrade);
+      render();
+    }));
+  $out.querySelectorAll("[data-genyear]").forEach((b) =>
+    b.addEventListener("click", () => {
+      genDetail = { year: b.dataset.genyear, grade: Number(b.dataset.gengrade) };
+      render();
+    }));
+
+  // クリックした「世代 × 学年」の個人ランキング
+  if (genDetail) {
+    const { year, grade } = genDetail;
+    const v = stat.get(`${year}|${grade}`);
+    const season = grade === 0 ? Number(year) - 1 : Number(year) + grade - 1;
+    const dc = document.createElement("section");
+    dc.className = "card pad-0";
+    dc.style.marginBottom = "16px";
+    dc.innerHTML = `<div class="card-title" style="padding:16px 16px 0">
+      <h3>${year}年入学 の ${COLS[grade]}（${season}年度） ${ITEM_LABELS[item] || item} ランキング</h3>
+      <div class="pill-row">
+        <span class="hint">${v ? `${v.total}名中 ${v.n}名の平均 ${formatScore(v.avg, false)}` : ""}</span>
+        <button type="button" class="btn ghost mini" id="genDetailClose">✕ ${t("閉じる", "关闭")}</button>
+      </div></div>
+      <div class="body" style="padding:0 4px 8px"></div>`;
+    $out.append(dc);
+    const list = v ? v.ranked.map((x, i) => ({ ...x, rank: i + 1 })) : [];
+    renderTable(dc.querySelector(".body"), [
+      { label: "#", cls: "mid", render: (r) => `<span class="rank">${r.rank}</span>` },
+      { label: "選手", cls: "name", render: (r) => `<a href="player.html?id=${r.s.id}">${esc(r.s.name)}</a>` },
+      { label: "記録", cls: "num", render: (r) => `<span class="time">${formatScore(r.rec.seconds)}</span>` },
+      { label: "樹立日", cls: "mid", render: (r) => fmtDateCell(r.rec, r.s) },
+      { label: "大会", render: (r) => (r.rec.competitionId
+        ? `<a href="race.html?type=competition&id=${r.rec.competitionId}">${esc(r.rec.competitionName || "—")}</a>`
+        : esc(r.rec.competitionName || "—")) },
+    ], list, { empty: t("記録がありません", "没有记录") });
+    dc.querySelector("#genDetailClose").addEventListener("click", () => { genDetail = null; render(); });
+  }
+
+  const series = ordered.map((y) => ({
+    name: `${y}年`,
+    points: COLS.map((c, g) => {
+      const v = stat.get(`${y}|${g}`);
+      return v ? { x: c, y: v.avg, n: v.n } : null;
+    }).filter(Boolean),
+  })).filter((s) => s.points.length);
+
+  const card = document.createElement("section");
+  card.className = "card";
+  card.innerHTML = `<div class="card-title"><h3>${ITEM_LABELS[item] || item} 世代別の伸び方</h3>
+    <span class="hint">${t("1本の線が1世代（入学年）の", "每条线为一个世代（入学年份）的")}${avgLabel}</span></div>
+    <div id="genChart"></div>`;
+  $out.append(card);
+  lineChart(card.querySelector("#genChart"), {
+    series, xMode: "category", categories: COLS,
+    formatX: (c) => c, formatY: (v) => formatScore(v, false), maxLegend: 14,
+    tooltip: (p) => `<div style="opacity:.7">${p.x}</div><div><b>${formatScore(p.y)}</b></div>
+      ${p.n ? `<div style="opacity:.7">${p.n}名の平均</div>` : ""}`,
+    emptyText: "データがありません",
+  });
+}
+
+// ---------- 视图 4：全チーム平均の推移 ----------
+function renderAvg() {
+  const topN = Number($avgScope.value);
+  const limit = Number($avgPeriod.value);
+  // 年度の範囲は実データのあるところから（自己ベストページ由来の高校記録は除外済み）
+  const wanted = new Set(ITEMS_BY_SEX[sex]);
+  const studentById = new Map(store.students.map((s) => [s.id, s]));
+  let start = CUR_AY;
+  for (const r of store.records) {
+    if (!wanted.has(r.item) || !r.date) continue;
+    if (isHighSchoolRecord(r, studentById.get(r.studentId))) continue;
+    const ay = academicYear(r.date);
+    if (ay && ay < start) start = ay;
+  }
+  let years = [];
+  for (let ay = start; ay <= CUR_AY; ay++) years.push(ay);
+  if (limit) years = years.slice(-limit);
+
+  const cache = new Map();
+  for (const s of store.students) cache.set(s.id, store.recordsOf(s.id, { include: $include.value }));
+
+  const chosen = ITEMS_BY_SEX[sex].filter((k) => avgItemsSel.has(k));
+  const usePB = $avgBase.value === "pb";
+  $out.textContent = "";
+  for (const item of chosen) {
+    const pts = [];
+    for (const ay of years) {
+      const vals = rosterOfYear(ay)
+        .map((s) => (usePB ? pbAsOf(s, item, ay, cache) : seasonBest(s, item, ay, cache)))
+        .filter(Boolean).map((r) => r.seconds);
+      const avg = avgTop(vals, topN);
+      if (avg != null) pts.push({ x: String(ay), y: avg, n: topN > 0 ? Math.min(topN, vals.length) : vals.length, total: vals.length });
+    }
+    const label = topN > 0 ? t(`上位${topN}名平均`, `前${topN}名平均`) : t("全員平均", "全员平均");
+    const base = usePB ? t("自己ベスト（その年度末まで）", "个人最好成绩（截至该年度末）")
+      : t("その年度のベスト", "该年度最好成绩");
+    const card = document.createElement("section");
+    card.className = "card";
+    card.style.marginBottom = "16px";
+    card.innerHTML = `<div class="card-title"><h3>${ITEM_LABELS[item] || item} のチーム平均推移</h3>
+      <span class="hint">${sex}子・${label}（${base}） ／ 横軸は年度（4月〜翌3月）</span></div>
+      <div id="avgChart-${item}"></div>`;
+    $out.append(card);
+    lineChart(card.querySelector(`#avgChart-${item}`), {
+      series: [{ name: `${ITEM_LABELS[item] || item}（${label}）`, points: pts }],
+      xMode: "category", categories: years.map(String), formatX: (c) => c,
+      formatY: (v) => formatScore(v, false), legend: false,
+      tooltip: (p) => `<div style="opacity:.7">${p.x}年度</div><div><b>${formatScore(p.y)}</b></div>
+        <div style="opacity:.7">対象${p.total}名中 ${p.n}名の平均</div>`,
+      emptyText: "データがありません",
+    });
+  }
+  if (!$out.children.length) { $out.innerHTML = `<div class="card empty">項目を選んでください</div>`; return; }
+  const foot = document.createElement("p");
+  foot.className = "footnote";
+  foot.textContent = usePB
+    ? t("※ 「自己ベスト」はその年度末までに出した記録でのベスト。その年度に走っていなくても、それ以前のベストがあれば対象に入ります（成績包含＝在学中のみ のときは高校時代を除く）。"
+        + "また、途中で退部・マネージャー転向した選手の時期が確認できないため、過年度の平均は不正確な可能性があります（参考値）。",
+        "※「个人最好成绩」= 截至该年度末的最好成绩。该年度没跑、但以前有成绩的选手也会计入（成绩范围＝仅在校期间时排除高中成绩）。"
+        + "另外，中途退部、转经理的选手时间无法确认，往年平均值可能不准确（仅供参考）。")
+    : t("※ 「その年度のベスト」は、その年度に記録がある選手だけの平均です。年度の途中や記録が少ない年度（特に 10000m・ハーフ）は実際の実力より遅く出ます。"
+        + "また、途中で退部・マネージャー転向した選手の時期が確認できないため、過年度の平均は不正確な可能性があります（参考値）。",
+        "※「该年度最好成绩」只统计该年度有成绩的选手。年度进行中或成绩很少的年度（尤其 10000m・半马）会偏慢。"
+        + "另外，中途退部、转经理的选手时间无法确认，往年平均值可能不准确（仅供参考）。");
+  $out.append(foot);
+}
+
+function render() {
+  const view = $view.value;
+  if (view !== "gen") genDetail = null;
+  $itemField.hidden = view === "avg";
+  $avgItemsField.hidden = view !== "avg";
+  $avgScopeField.hidden = view !== "avg";
+  $avgPeriodField.hidden = view !== "avg";
+  $avgBaseField.hidden = view !== "avg";
+  $genSortField.hidden = view !== "gen";
+  // 「平均の取り方」は世代対決でも使う（既定は全員平均）
+  if (view === "gen") $avgScopeField.hidden = false;
+  // 「対象」在所有视图里都有效（默认＝退部・転向を除く）
+  $scopeField.hidden = false;
+  $yearField.hidden = !(view === "list" || view === "year");
+  $qField.hidden = view !== "list";
+  $out.textContent = "";
+
+  if (view === "year" || view === "gen" || view === "avg") {
+    // 这些视图不需要按姓名/年份过滤
+    $year.value = $year.value || "";
+  }
+  const students = view === "list" ? filtered() : scoped(store.studentsBySex(sex));
+
+  if (view === "avg") {
+    $count.textContent = t("全チーム平均の推移（年度ごとに、その年度のベストを平均）",
+      "全队平均推移（按年度，取该年度最好成绩的平均）");
+    return renderAvg();
+  }
+  if (view === "year") {
+    $count.textContent = t("入学年ごとの選手の伸び（高校 → 4年）", "按入学年份看选手的成长（高中 → 4 年）");
+    return renderYear(students);
+  }
+  if (view === "gen") {
+    const n = Number($avgScope.value);
+    $count.textContent = t(
+      `世代（入学年）× 学年 の${n > 0 ? `上位${n}名平均` : "全員平均"}を比較`,
+      `世代（入学年份）× 学年 的${n > 0 ? `前${n}名平均` : "全员平均"}对比`);
+    return renderGen(students);
+  }
+
+  const shown = $item.value ? [ITEM_LABELS[$item.value]] : ITEMS_BY_SEX[sex].map((i) => ITEM_LABELS[i]);
+  $count.textContent = `${filtered().length} 名 ／ 表示項目：${shown.join("・")}`;
+  renderList(filtered());
+  if (!$out.children.length) $out.innerHTML = `<div class="card empty">記録がありません</div>`;
+}
+
+$view.addEventListener("change", () => { sort = { key: null, dir: 1 }; render(); });
+$scope.addEventListener("change", render);
+$item.addEventListener("change", render);
+[$year, $include].forEach((el) => el.addEventListener("change", () => { fillYears(); render(); }));
+$q.addEventListener("input", render);
+$genSort.addEventListener("change", () => { genSortGrade = Number($genSort.value); render(); });
+$avgScope.addEventListener("change", render);
+$avgBase.addEventListener("change", render);
+$avgPeriod.addEventListener("change", render);
+document.addEventListener("langchange", () => { fillAvgItems(); render(); });
+
+renderSexTabs();
+fillItems();
+fillYears();
+fillGenSort();
+fillAvgItems();
+render();
+</script>
+</body>
+</html>

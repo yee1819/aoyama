@@ -1,0 +1,542 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>時点ランキング | 青山学院大学 陸上競技部</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<header data-site-header></header>
+
+<main>
+  <div class="breadcrumb"><a href="index.html">概況</a> / 時点ランキング</div>
+  <section class="page-head">
+    <h1>時点ランキング</h1>
+    <p>指定した日付「その時点」での部内記録ランキング。各人のベスト1本だけでなく、上位複数本（例：13:18・13:24・13:35…）も並べて見られます。</p>
+  </section>
+
+  <section class="controls">
+    <div class="field">
+      <label>基準日</label>
+      <input type="date" id="date">
+    </div>
+    <div class="field" style="align-self:flex-end">
+      <div class="quick-dates">
+        <button class="btn ghost" id="prevYear" title="1年前">« 1年</button>
+        <button class="btn ghost" id="prevDay">前日</button>
+        <button class="btn ghost" id="nextDay">翌日</button>
+        <button class="btn ghost" id="nextYear">1年 »</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>種目</label>
+      <select id="item"></select>
+    </div>
+    <div class="field">
+      <label>性別</label>
+      <select id="sex">
+        <option value="男">男子</option>
+        <option value="女">女子</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>対象</label>
+      <select id="scope">
+        <option value="active">その時点の在籍選手（退部・転向を除く）</option>
+        <option value="member">その時点の在籍部員（退部・転向も含む）</option>
+        <option value="all">歴代全員（OB・OG含む）</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>成績包含</label>
+      <select id="include">
+        <option value="all">全部成績（高校時代を含む）</option>
+        <option value="enrolled">在学中のみ</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>表示</label>
+      <select id="mode">
+        <option value="best" selected>各人のベスト（1人1行）</option>
+        <option value="top">上位成績（1人複数行）</option>
+        <option value="all">全成績（1人複数行）</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>1人あたり</label>
+      <select id="perN">
+        <option value="1">上位1本</option>
+        <option value="2">上位2本</option>
+        <option value="3" selected>上位3本</option>
+        <option value="5">上位5本</option>
+        <option value="10">上位10本</option>
+        <option value="0">全部</option>
+      </select>
+    </div>
+    <div class="field" style="min-width:150px">
+      <label>ハイライト</label>
+      <select id="hlYear"><option value="">入学年：なし</option></select>
+    </div>
+    <div class="field" style="min-width:230px">
+      <label>選手をハイライト（複数可）</label>
+      <input type="search" id="hlPlayer" placeholder="氏名で検索して追加" autocomplete="off">
+      <div class="hint" id="hlHint" style="font-size:11px;margin-top:2px"></div>
+      <div class="pill-row" id="hlChips" style="margin-top:6px"></div>
+    </div>
+    <div class="field" style="margin-left:auto;align-self:flex-end">
+      <button class="btn ghost" id="csv">CSVダウンロード</button>
+    </div>
+  </section>
+
+  <section class="card" style="margin-bottom:18px">
+    <div class="card-title">
+      <h3 id="summary">—</h3>
+      <span class="hint" id="summaryHint"></span>
+    </div>
+    <div id="table"></div>
+  </section>
+
+  <section class="card">
+    <div class="card-title">
+      <h3>記録の推移</h3>
+      <div class="pill-row">
+        <select id="chartMode">
+          <option value="athlete-time">選手比較・記録</option>
+          <option value="athlete-rank">選手比較・順位</option>
+          <option value="topn">TOP N 推移（部内N位の推移）</option>
+        </select>
+        <select id="topN" title="N">
+          <option value="1">N=1</option>
+          <option value="3">N=3</option>
+          <option value="5" selected>N=5</option>
+          <option value="10">N=10</option>
+          <option value="20">N=20</option>
+          <option value="0">全員</option>
+        </select>
+        <select id="lineStyle" title="線の種類">
+          <option value="line" selected>折れ線</option>
+          <option value="step">階段</option>
+        </select>
+        <span id="chartPeriod"></span>
+        <button class="btn ghost" id="clearSel">選択解除</button>
+      </div>
+    </div>
+    <p class="hint" style="margin:-4px 0 12px;color:var(--muted);font-size:12px">
+      選手名をクリックすると個人ページへ移動します。表の「＋」で最大6人まで下のグラフに追加できます。
+      「TOP N 平均」は部内上位 N 名の平均記録の推移（N=全員なら全員平均）です。
+    </p>
+    <div id="chart"></div>
+  </section>
+
+  <p class="footnote">
+    ※ 順位は「その日時点で判明している記録」での部内順位です。同一記録の場合は先に樹立した選手を上位としています。
+    「上位成績」表示では、1人の選手が複数行に登場します。
+  </p>
+  <p class="footnote" id="seasonNote"></p>
+</main>
+
+<footer data-site-footer></footer>
+
+<script type="module">
+import { loadStore, ITEM_ORDER, formatScore, formatDiff, currentSeason, scoreText } from "./assets/store.js";
+import { mountLayout, setGeneratedAt, renderTable, fmtDate, fmtDateCell, fmtDateFull, gradeLabel, qs, esc, attachSuggestions } from "./assets/ui.js";
+import { lineChart } from "./assets/charts.js";
+import { mountPeriod, filterPoints } from "./assets/period.js";
+import { t } from "./assets/i18n.js";
+
+const store = await loadStore();
+mountLayout("rankings.html");
+setGeneratedAt(store.generatedAt);
+
+const today = new Date();
+const todayISO = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
+const $item = document.getElementById("item");
+const $date = document.getElementById("date");
+const $sex = document.getElementById("sex");
+const $scope = document.getElementById("scope");
+const $include = document.getElementById("include");
+const $mode = document.getElementById("mode");
+const $perN = document.getElementById("perN");
+const $chartMode = document.getElementById("chartMode");
+const $topN = document.getElementById("topN");
+const $lineStyle = document.getElementById("lineStyle");
+
+const ITEMS_BY_SEX = {
+  "男": ["five_5000m", "ten_10000m", "half_marathon", "three_3000m", "fifteen_1500m"],
+  "女": ["fifteen_1500m", "three_3000m", "five_5000m", "ten_10000m", "half_marathon"],
+};
+const ALL_ITEMS = [...new Set([...ITEM_ORDER])].filter((k) => store.records.some((r) => r.item === k));
+
+function fillItems() {
+  const preferred = ITEMS_BY_SEX[$sex.value].filter((k) => ALL_ITEMS.includes(k));
+  const rest = ALL_ITEMS.filter((k) => !preferred.includes(k));
+  const list = [...preferred, ...rest];
+  const cur = qs("item");
+  $item.innerHTML = list.map((k) => `<option value="${k}">${store.itemLabel(k)}</option>`).join("");
+  $item.value = cur && list.includes(cur) ? cur : list[0];
+}
+
+$date.max = todayISO;
+$date.value = qs("date") || todayISO;
+$sex.value = qs("sex") === "女" ? "女" : "男";
+$scope.value = ["all", "member"].includes(qs("scope")) ? qs("scope") : "active";
+$include.value = qs("include") === "enrolled" ? "enrolled" : "all";
+if (qs("mode")) $mode.value = qs("mode");
+fillItems();
+
+let selected = [];
+let currentRows = [];
+let period = mountPeriod(document.getElementById("chartPeriod"), (s) => { period = s; drawChart(); });
+
+// ---- ハイライト（入学年 / 選手を複数） ----
+const $hlYear = document.getElementById("hlYear");
+const $hlPlayer = document.getElementById("hlPlayer");
+const $hlChips = document.getElementById("hlChips");
+let hlYear = "";
+let hlIds = new Set();
+let tableStudents = [];   // いま表に出ている選手（ハイライト候補を絞るのに使う）
+const isHl = (student) => !!student
+  && ((hlYear && String(student.enrollmentYear) === hlYear) || hlIds.has(student.id));
+/** 行のクラス：今季（緑）＋ハイライト（金） */
+const rowCls = (student, date) =>
+  [inSeason(date) ? "row-current" : "", isHl(student) ? "row-hl" : ""].filter(Boolean).join(" ");
+
+function fillHlYears() {
+  const years = [...new Set(store.studentsBySex($sex.value).map((s) => s.enrollmentYear).filter(Boolean))]
+    .sort().reverse();
+  const cur = $hlYear.value;
+  $hlYear.innerHTML = `<option value="">入学年：なし</option>`
+    + years.map((y) => `<option value="${y}">${y}年入学</option>`).join("");
+  $hlYear.value = years.includes(cur) ? cur : "";
+  hlYear = $hlYear.value;
+}
+function renderHlChips() {
+  $hlChips.innerHTML = [...hlIds].map((id) => {
+    const s = store.student(id);
+    return s ? `<button type="button" class="btn ghost active" data-hl="${id}">${esc(s.name)} ×</button>` : "";
+  }).join("");
+  $hlChips.querySelectorAll("[data-hl]").forEach((b) =>
+    b.addEventListener("click", () => {
+      hlIds.delete(Number(b.dataset.hl));
+      renderHlChips();
+      render();
+    }));
+}
+/**
+ * ハイライト候補は「いま表に出ている選手」だけ。
+ * 入学年を選んでいれば、その学年の選手だけに絞る（入学年 → メンバー の2段階）。
+ */
+function refreshHlSuggest() {
+  const pool = tableStudents.length ? tableStudents : store.studentsBySex($sex.value);
+  const list = hlYear ? pool.filter((s) => String(s.enrollmentYear) === hlYear) : pool;
+  attachSuggestions($hlPlayer, list.map((s) => s.name), { limit: 2000 });
+  const $hint = document.getElementById("hlHint");
+  if ($hint) {
+    $hint.textContent = t(
+      hlYear ? `候補：${hlYear}年入学 ${list.length}名（表に出ている選手のみ）`
+             : `候補：表に出ている選手 ${list.length}名（入学年を選ぶと絞り込めます）`,
+      hlYear ? `候选：${hlYear} 年入学 ${list.length} 人（仅表格中出现的选手）`
+             : `候选：表格中出现的选手 ${list.length} 人（选入学年可进一步筛选）`);
+  }
+}
+$hlYear.addEventListener("change", () => { hlYear = $hlYear.value; render(); });
+$hlPlayer.addEventListener("change", () => {
+  const q = $hlPlayer.value.trim();
+  if (!q) return;
+  const pool = store.studentsBySex($sex.value);
+  const s = pool.find((x) => x.name === q) || pool.find((x) => x.name.startsWith(q));
+  if (!s) return;
+  hlIds.add(s.id);
+  $hlPlayer.value = "";
+  renderHlChips();
+  render();
+});
+
+// 本赛季（4/1〜翌年3/31）的记录加底色
+const SEASON = currentSeason();
+const inSeason = (d) => !!d && d >= SEASON.from && d <= SEASON.to;
+
+function shiftDate(days) {
+  const d = new Date($date.value + "T00:00:00");
+  if (Number.isNaN(d.getTime())) return;
+  d.setDate(d.getDate() + days);
+  $date.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  render();
+}
+document.getElementById("prevDay").onclick = () => shiftDate(-1);
+document.getElementById("nextDay").onclick = () => shiftDate(1);
+document.getElementById("prevYear").onclick = () => shiftDate(-365);
+document.getElementById("nextYear").onclick = () => shiftDate(365);
+document.getElementById("clearSel").onclick = () => { selected = []; render(); };
+
+$date.addEventListener("change", render);
+$item.addEventListener("change", () => { selected = []; render(); });
+$scope.addEventListener("change", () => { selected = []; render(); });
+$include.addEventListener("change", () => { selected = []; render(); });
+$mode.addEventListener("change", render);
+$perN.addEventListener("change", render);
+$chartMode.addEventListener("change", drawChart);
+$topN.addEventListener("change", drawChart);
+$lineStyle.addEventListener("change", drawChart);
+$sex.addEventListener("change", () => { selected = []; fillItems(); fillHlYears(); refreshHlSuggest(); render(); });
+// 切换语言后重画一次（带变量的整句要重新生成）
+document.addEventListener("langchange", () => render());
+
+/** 取该选手符合条件的记录（<= 基准日），按成绩升序 */
+function athleteRecords(id, item, date, include) {
+  return store.recordsOf(id, { include })
+    .filter((r) => r.item === item && r.isFinished !== false && r.seconds != null && (!r.date || r.date <= date))
+    .sort((a, b) => a.seconds - b.seconds || (a.date || "").localeCompare(b.date || ""));
+}
+
+function render() {
+  const scope = $scope.value, include = $include.value, sex = $sex.value;
+  const item = $item.value, date = $date.value, mode = $mode.value;
+  const label = store.itemLabel(item);
+  const perN = Number($perN.value);
+  $perN.disabled = mode === "best";
+
+  const roster = store.rosterAsOf(date, { sex, includeWithdraw: scope === "member" });
+  const pool = scope === "all" ? store.studentsBySex(sex) : roster;
+  const withRecord = pool.filter((s) => athleteRecords(s.id, item, date, include).length).length;
+
+  if (mode === "best") {
+    const rows = store.rankingAsOf(date, item, { scope, include, sex });
+    currentRows = rows;
+    rows.forEach((r) => { r.__cls = rowCls(r.student, r.pbDate); });
+    document.getElementById("summary").textContent = t(
+      `${fmtDateFull(date)} 時点 ／ ${sex}子 ／ ${label} ／ ${rows.length}名`,
+      `${fmtDateFull(date)} 时点 ／ ${sex}子 ／ ${label} ／ ${rows.length} 名`);
+    document.getElementById("summaryHint").textContent =
+      (scope === "all"
+        ? t("歴代全員が対象", "対象为历代全体")
+        : t(`在籍 ${roster.length}名 中 ${withRecord}名が記録あり`,
+            `在籍 ${roster.length} 人中 ${withRecord} 人有成绩`)
+          + (scope === "member" ? t("（退部・転向含む）", "（含退部・转经理）") : ""))
+      + (include === "enrolled" ? " ／ 在学中の記録のみ" : " ／ 高校時代を含む");
+
+    renderTable(document.getElementById("table"), [
+      { label: "#", cls: "mid", render: (r) => `<span class="rank">${r.rank}</span>` },
+      { label: "選手", cls: "name", render: (r) => nameLink(r.student) },
+      { label: "比較", cls: "mid", render: (r) => compareBtn(r.student) },
+      { label: "ベスト", cls: "num", render: (r) => `<span class="time">${scoreText(r.record)}</span>` },
+      { label: "樹立日", cls: "mid", render: (r) => fmtDateCell(r.record, r.student) },
+      { label: "大会", render: (r) => r.record.competitionId
+        ? `<a href="race.html?type=competition&id=${r.record.competitionId}">${esc(r.record.competitionName || "—")}</a>`
+        : esc(r.record.competitionName || "—") },
+      { label: "樹立時→現在", cls: "mid", render: (r) => {
+        if (!r.rankAtPb) return "—";
+        const d = r.rankAtPb - r.rank;
+        if (d === 0) return `<span class="badge dim">${r.rank}位→${r.rank}位</span>`;
+        return `<span class="badge">${r.rankAtPb}位→${r.rank}位</span> <span class="${d > 0 ? "delta-up" : "delta-down"}">${d > 0 ? "▲" : "▼"}${Math.abs(d)}</span>`;
+      } },
+      { label: "差", cls: "num", render: (r, i) => i === 0 ? "—"
+        : `<span class="time" style="color:var(--muted)">${formatDiff(r.seconds - rows[0].seconds)}</span>` },
+    ], rows, { empty: "この時点では該当する記録がありません" });
+    bindPicks();
+    if (!selected.length) { selected = rows.slice(0, 3).map((r) => r.student.id); highlightPicks(); }
+  } else {
+    // 1人複数行：その選手の上位 N 本（または全記録）を並べる
+    const list = [];
+    for (const s of pool) {
+      const recs = athleteRecords(s.id, item, date, include);
+      const take = mode === "all" || perN === 0 ? recs : recs.slice(0, perN);
+      take.forEach((r, i) => list.push({ student: s, record: r, seconds: r.seconds, own: i + 1, total: recs.length }));
+    }
+    list.sort((a, b) => a.seconds - b.seconds || (a.record.date || "").localeCompare(b.record.date || ""));
+    const LIMIT = 400;
+    const shown = list.slice(0, LIMIT);
+    shown.forEach((r, i) => { r.rank = i + 1; });
+    shown.forEach((r) => { r.__cls = rowCls(r.student, r.record.date); });
+    currentRows = shown;
+
+    const modeLabel = mode === "all" ? "全成績" : `各人の上位${perN === 0 ? "全" : perN}本`;
+    document.getElementById("summary").textContent =
+      t(`${fmtDateFull(date)} 時点 ／ ${sex}子 ／ ${label} ／ ${modeLabel} ／ ${list.length}件`,
+        `${fmtDateFull(date)} 时点 ／ ${sex}子 ／ ${label} ／ ${modeLabel} ／ ${list.length} 件`);
+    document.getElementById("summaryHint").textContent =
+      (scope === "all"
+        ? t("歴代全員", "历代全体")
+        : t(`在籍 ${roster.length}名`, `在籍 ${roster.length} 人`)
+          + (scope === "member" ? t("（退部・転向含む）", "（含退部・转经理）") : ""))
+      + (include === "enrolled" ? " ／ 在学中の記録のみ" : " ／ 高校時代を含む")
+      + (list.length > LIMIT ? t(` ／ 表示は上位${LIMIT}件`, ` ／ 仅显示前 ${LIMIT} 件`) : "");
+
+    renderTable(document.getElementById("table"), [
+      { label: "#", cls: "mid", render: (r) => `<span class="rank">${r.rank}</span>` },
+      { label: "選手", cls: "name", render: (r) => nameLink(r.student) },
+      { label: "比較", cls: "mid", render: (r) => compareBtn(r.student) },
+      { label: "本人", cls: "mid", render: (r) => `<span class="badge ${r.own === 1 ? "green" : "dim"}">${r.own}位</span>`
+        + (r.total > r.own ? `<span style="color:var(--muted);font-size:11px">/${r.total}</span>` : "") },
+      { label: "記録", cls: "num", render: (r) => `<span class="time">${scoreText(r.record)}</span>` },
+      { label: "日付", cls: "mid", render: (r) => fmtDateCell(r.record, r.student) },
+      { label: "大会", render: (r) => r.record.competitionId
+        ? `<a href="race.html?type=competition&id=${r.record.competitionId}">${esc(r.record.competitionName || "—")}</a>`
+        : esc(r.record.competitionName || "—") },
+      { label: "差", cls: "num", render: (r, i) => i === 0 ? "—"
+        : `<span class="time" style="color:var(--muted)">${formatDiff(r.seconds - shown[0].seconds)}</span>` },
+    ], shown, { empty: "この時点では該当する記録がありません" });
+    bindPicks();
+  }
+
+  drawChart();
+  renderSeasonNote();
+  // ハイライト候補＝いま表に出ている選手
+  tableStudents = [...new Map((currentRows || []).filter((r) => r.student).map((r) => [r.student.id, r.student])).values()];
+  refreshHlSuggest();
+}
+
+function renderSeasonNote() {
+  document.getElementById("seasonNote").innerHTML =
+    `<span style="display:inline-block;width:12px;height:12px;background:#eef7f0;box-shadow:inset 3px 0 0 var(--accent);vertical-align:-2px;margin-right:6px"></span>` +
+    t(`緑の行は本赛季（${SEASON.label}：${SEASON.from} 〜 ${SEASON.to}）の記録です。`,
+      `绿色行是本赛季（${SEASON.label}：${SEASON.from} 〜 ${SEASON.to}）的成绩。`);
+}
+
+/** 选手名 → 个人页；「＋」按钮 → 加入下面的对比图 */
+const nameLink = (s) => `<a href="player.html?id=${s.id}" style="${selected.includes(s.id) ? "font-weight:800" : ""}">${esc(s.name)}</a>`;
+const compareBtn = (s) => {
+  const on = selected.includes(s.id);
+  return `<button type="button" class="btn ghost mini${on ? " active" : ""}" data-pick="${s.id}" title="${on ? "対比中・クリックで解除" : "対比に追加"}">${on ? "✓" : "＋"}</button>`;
+};
+function bindPicks() {
+  document.querySelectorAll("[data-pick]").forEach((a) => {
+    a.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const id = Number(a.dataset.pick);
+      if (selected.includes(id)) selected = selected.filter((x) => x !== id);
+      else if (selected.length >= 6) selected = [...selected.slice(1), id];
+      else selected.push(id);
+      render();
+    });
+  });
+}
+function highlightPicks() {
+  document.querySelectorAll("[data-pick]").forEach((a) => {
+    const on = selected.includes(Number(a.dataset.pick));
+    a.classList.toggle("active", on);
+    a.textContent = on ? "✓" : "＋";
+  });
+}
+
+/** TOP N 平均：每个「有比赛的日子」计算部内上位 N 名（N=0 表示全员）的平均成绩 */
+function topNAvgSeries(n, item, date, scope, include, sex) {
+  const pool = scope === "all" ? store.studentsBySex(sex) : store.rosterAsOf(date, { sex });
+  const dates = new Set();
+  for (const s of pool) {
+    for (const r of store.recordsOf(s.id, { include })) {
+      if (r.item === item && r.seconds != null && r.date && r.date <= date) dates.add(r.date);
+    }
+  }
+  const sorted = [...dates].sort();
+  const points = [];
+  for (const d of sorted) {
+    const rows = store.rankingAsOf(d, item, { scope, include, sex });
+    const take = n === 0 ? rows : rows.slice(0, n);
+    if (!take.length) continue;
+    const avg = take.reduce((sum, r) => sum + r.seconds, 0) / take.length;
+    points.push({
+      x: d, y: avg,
+      meta: { count: take.length, names: take.slice(0, 5).map((r) => r.student.name).join("・") + (take.length > 5 ? "…" : "") },
+    });
+  }
+  return points;
+}
+
+function drawChart() {
+  const item = $item.value, date = $date.value, scope = $scope.value;
+  const include = $include.value, sex = $sex.value;
+  const cm = $chartMode.value;
+  const style = $lineStyle.value;
+  const n = Number($topN.value);
+  const container = document.getElementById("chart");
+  $topN.style.display = cm === "topn" ? "" : "none";
+
+  if (cm === "topn") {
+    const points = filterPoints(topNAvgSeries(n, item, date, scope, include, sex), period);
+    if (!points.length) { container.innerHTML = `<div class="chart-empty">データがありません</div>`; return; }
+    const title = n === 0 ? `${sex}子 ${store.itemLabel(item)} 全員平均` : `${sex}子 ${store.itemLabel(item)} 上位${n}名平均`;
+    lineChart(container, {
+      series: [{ name: title, points }],
+      step: style === "step",
+      legend: false,
+      formatY: (v) => formatScore(v, false),
+      tooltip: (p) => `<div style="opacity:.7">${fmtDate(p.x)}</div>
+        <div><b>${formatScore(p.y)}</b> <span style="opacity:.7">平均</span></div>
+        <div style="opacity:.7">${p.meta.count}名：${esc(p.meta.names)}</div>`,
+    });
+    return;
+  }
+
+  const series = selected.map((id) => {
+    const s = store.student(id);
+    const hist = store.pbHistory(id, item, date, { include });
+    const points = hist.map((r) => ({
+      x: r.date,
+      y: cm === "athlete-rank" ? store.rankOf(id, item, r.date, scope, include, sex) : r.seconds,
+      meta: r,
+    }));
+    const last = points[points.length - 1];
+    if (last && date > last.x) {
+      points.push({
+        x: date,
+        y: cm === "athlete-rank" ? (store.rankOf(id, item, date, scope, include, sex) ?? last.y) : last.y,
+        meta: last.meta, carry: true,
+      });
+    }
+    return { name: s ? s.name : String(id), points: filterPoints(points, period) };
+  }).filter((s) => s.points.length);
+
+  if (!series.length) {
+    container.innerHTML = `<div class="chart-empty">比較したい選手を上の表から選んでください</div>`;
+    return;
+  }
+  const isRank = cm === "athlete-rank";
+  lineChart(container, {
+    series,
+    step: style === "step",
+    invertY: isRank,
+    yMin: isRank ? 1 : null,
+    formatY: (v) => isRank ? v + "位" : formatScore(v, false),
+    tooltip: (p, s, all, hidden) => {
+      const lines = all.filter((x) => !hidden.has(x.name)).map((x) => {
+        const q = x._pts.reduce((a, b) =>
+          (Math.abs(Date.parse(b.x) - Date.parse(p.x)) < Math.abs(Date.parse(a.x) - Date.parse(p.x)) ? b : a));
+        return `<div><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${x.color};margin-right:6px"></span>${esc(x.name)} <b>${isRank ? q.y + "位" : formatScore(q.y)}</b></div>`;
+      }).join("");
+      return `<div style="opacity:.7;margin-bottom:3px">${fmtDate(p.x)}</div>${lines}
+        ${p.meta && p.meta.competitionName ? `<div style="opacity:.7;margin-top:3px">${esc(p.meta.competitionName)}</div>` : ""}`;
+    },
+  });
+}
+
+// --- CSV 导出 ---
+document.getElementById("csv").onclick = () => {
+  if (!currentRows.length) return;
+  const multi = $mode.value !== "best";
+  const head = multi
+    ? ["順位", "選手", "本人順位", "学年", "記録", "日付", "大会"]
+    : ["順位", "選手", "学年", "ベスト", "樹立日", "大会", "樹立時順位"];
+  const lines = [head.join(",")].concat(currentRows.map((r) => multi
+    ? [r.rank, r.student.name, r.own, gradeLabel(store.gradeAt(r.student, r.record.date)) || "",
+       formatScore(r.seconds, false), r.record.date || "", (r.record.competitionName || "").replace(/,/g, " ")].join(",")
+    : [r.rank, r.student.name, r.grade || "", formatScore(r.seconds, false), r.pbDate || "",
+       (r.record.competitionName || "").replace(/,/g, " "), r.rankAtPb || ""].join(",")));
+  const blob = new Blob(["\uFEFF" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `ranking_${$sex.value}_${$item.value}_${$date.value}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+fillHlYears();
+refreshHlSuggest();
+renderHlChips();
+render();
+</script>
+</body>
+</html>

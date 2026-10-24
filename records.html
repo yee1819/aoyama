@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>記録一覧 | 青山学院大学 陸上競技部</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<header data-site-header></header>
+
+<main>
+  <div class="breadcrumb"><a href="index.html">概況</a> / 記録一覧</div>
+  <section class="page-head">
+    <h1>記録一覧</h1>
+    <p>全部のレース記録を横断で検索できます。種目・期間・大会・選手・順位で絞り込み、記録順に並べ替えられます。</p>
+  </section>
+
+  <section class="controls">
+    <div class="field">
+      <label>種目</label>
+      <select id="item"></select>
+    </div>
+    <div class="field">
+      <label>性別</label>
+      <select id="sex">
+        <option value="">すべて</option>
+        <option value="男">男子</option>
+        <option value="女">女子</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>期間</label>
+      <span id="period"></span>
+    </div>
+    <div class="field" style="min-width:180px">
+      <label>大会</label>
+      <input type="search" id="race" placeholder="大会名で検索">
+    </div>
+    <div class="field" style="min-width:150px">
+      <label>選手</label>
+      <input type="search" id="player" placeholder="氏名で検索">
+    </div>
+    <div class="field">
+      <label>順位</label>
+      <select id="rank">
+        <option value="">すべて</option>
+        <option value="win">優勝のみ</option>
+        <option value="8">入賞（8位以内）</option>
+        <option value="3">3位以内</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>備考</label>
+      <select id="mark">
+        <option value="">すべて</option>
+        <option value="pb">PB / SB あり</option>
+        <option value="prize">区間賞・優勝あり</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>完走</label>
+      <select id="finish">
+        <option value="yes" selected>完走のみ</option>
+        <option value="">DNF も含む</option>
+        <option value="no">DNF のみ</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>並び順</label>
+      <select id="sort">
+        <option value="date">日付（新しい順）</option>
+        <option value="time">記録（速い順）</option>
+        <option value="rank">順位（良い順）</option>
+        <option value="player">選手名</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>表示件数</label>
+      <select id="size">
+        <option value="50">50 件</option>
+        <option value="100" selected>100 件</option>
+        <option value="300">300 件</option>
+        <option value="0">すべて</option>
+      </select>
+    </div>
+    <div class="field" style="margin-left:auto;align-self:flex-end">
+      <button class="btn ghost" id="csv">CSVダウンロード</button>
+    </div>
+  </section>
+
+  <section class="grid cols-4" style="margin-bottom:14px">
+    <div class="card stat"><span class="label">該当件数</span><span class="value" id="statCount">—</span></div>
+    <div class="card stat"><span class="label">最速記録</span><span class="value" id="statBest">—</span></div>
+    <div class="card stat"><span class="label">入賞（8位以内）</span><span class="value" id="statPrize">—</span></div>
+    <div class="card stat"><span class="label">PB / SB</span><span class="value" id="statPb">—</span></div>
+  </section>
+
+  <p class="hint" id="summary" style="color:var(--muted);font-size:12px;margin:-4px 0 10px"></p>
+  <div class="card pad-0" id="out"></div>
+  <div class="pager" id="pager" style="display:flex;gap:8px;align-items:center;margin-top:12px;color:var(--muted)"></div>
+
+  <p class="footnote">
+    ※ 記録は「その大会で青学の選手が残した成績」です。順位は大会内順位、備考は PB / SB / 区間賞など。
+  </p>
+</main>
+
+<footer data-site-footer></footer>
+
+<script type="module">
+import { loadStore, ITEM_ORDER, formatScore, scoreText } from "./assets/store.js";
+import { mountLayout, setGeneratedAt, renderTable, fmtDate, fmtDateCell, gradeLabel, esc, attachSuggestions, remarkBadge } from "./assets/ui.js";
+import { mountPeriod, periodBounds } from "./assets/period.js";
+import { t } from "./assets/i18n.js";
+
+const store = await loadStore();
+mountLayout("records.html");
+setGeneratedAt(store.generatedAt);
+
+const $ = (id) => document.getElementById(id);
+let period = { mode: "all" };
+let page = 1;
+let filtered = [];
+
+const items = ITEM_ORDER.filter((k) => store.records.some((r) => r.item === k));
+$("item").innerHTML = `<option value="">すべて</option>` +
+  items.map((k) => `<option value="${k}">${store.itemLabel(k)}</option>`).join("");
+
+const params = new URLSearchParams(location.search);
+
+// 搜索框候选词：选手名 / 大会名（输入一个字就能选）
+attachSuggestions($("player"), store.students.map((s) => s.name));
+attachSuggestions($("race"), store.competitions.map((c) => c.name));
+if (params.get("item") && items.includes(params.get("item"))) $("item").value = params.get("item");
+if (params.get("sex")) $("sex").value = params.get("sex");
+if (params.get("player")) $("player").value = params.get("player");
+
+// 先把每条记录的派生字段算好，避免渲染时反复计算
+const decorated = store.records.map((r) => {
+  const s = store.student(r.studentId);
+  return {
+    r, s,
+    grade: s ? store.gradeOfRecord(r, s) : null,
+    sex: s ? (s.sex || "男") : "男",
+    remark: r.remark || "",
+  };
+});
+
+function apply() {
+  const item = $("item").value;
+  const sex = $("sex").value;
+  const raceQ = $("race").value.trim().toLowerCase();
+  const playerQ = $("player").value.trim().toLowerCase();
+  const rankMode = $("rank").value;
+  const mark = $("mark").value;
+  const finish = $("finish").value;
+  const [lo, hi] = periodBounds(period);
+
+  filtered = decorated.filter((d) => {
+    const r = d.r;
+    if (item && r.item !== item) return false;
+    if (sex && d.sex !== sex) return false;
+    if (lo && (!r.date || r.date < lo)) return false;
+    if (hi && (!r.date || r.date > hi)) return false;
+    if (raceQ && !(r.competitionName || "").toLowerCase().includes(raceQ)) return false;
+    if (playerQ && !(d.s ? d.s.name : "").toLowerCase().includes(playerQ)) return false;
+    if (rankMode === "win" && r.rank !== 1) return false;
+    if (rankMode === "8" && !(r.rank >= 1 && r.rank <= 8)) return false;
+    if (rankMode === "3" && !(r.rank >= 1 && r.rank <= 3)) return false;
+    if (mark === "pb" && !/PB|SB/i.test(d.remark)) return false;
+    if (mark === "prize" && !/区間賞|優勝|大会新/.test(d.remark)) return false;
+    if (finish === "yes" && r.isFinished === false) return false;
+    if (finish === "no" && r.isFinished !== false) return false;
+    return true;
+  });
+
+  const sort = $("sort").value;
+  filtered.sort((a, b) => {
+    if (sort === "time") {
+      const av = a.r.seconds ?? Infinity, bv = b.r.seconds ?? Infinity;
+      return av - bv || String(b.r.date).localeCompare(String(a.r.date));
+    }
+    if (sort === "rank") {
+      const av = a.r.rank ?? 9999, bv = b.r.rank ?? 9999;
+      return av - bv || String(b.r.date).localeCompare(String(a.r.date));
+    }
+    if (sort === "player") {
+      return String(a.s ? a.s.name : "").localeCompare(String(b.s ? b.s.name : ""), "ja")
+        || String(b.r.date).localeCompare(String(a.r.date));
+    }
+    return String(b.r.date || "").localeCompare(String(a.r.date || "")) || (a.r.rank ?? 9999) - (b.r.rank ?? 9999);
+  });
+
+  render();
+}
+
+function render() {
+  const size = Number($("size").value);
+  const item = $("item").value;
+  const pages = size ? Math.max(1, Math.ceil(filtered.length / size)) : 1;
+  if (page > pages) page = pages;
+  const shown = size ? filtered.slice((page - 1) * size, page * size) : filtered;
+
+  const times = filtered.map((d) => d.r.seconds).filter((x) => x != null);
+  const dnfCount = filtered.filter((d) => d.r.isFinished === false).length;
+  $("statCount").innerHTML = `${filtered.length}<small>件</small>`
+    + (dnfCount ? `<small style="color:var(--muted)">（DNF ${dnfCount}）</small>` : "");
+  // 混合项目时「最速」没有可比性，只有选定种目才显示
+  $("statBest").innerHTML = (times.length && item)
+    ? `${formatScore(Math.min(...times))}<small>${esc(store.itemLabel(item))}</small>`
+    : `<span style="font-size:14px;color:var(--muted);font-weight:600">種目を選ぶと表示</span>`;
+  $("statPrize").innerHTML = `${filtered.filter((d) => d.r.rank >= 1 && d.r.rank <= 8).length}<small>件</small>`;
+  $("statPb").innerHTML = `${filtered.filter((d) => /PB|SB/i.test(d.remark)).length}<small>件</small>`;
+  $("summary").textContent = size && filtered.length > size
+    ? t(`全 ${filtered.length} 件中 ${(page - 1) * size + 1}〜${(page - 1) * size + shown.length} 件を表示`,
+        `共 ${filtered.length} 件，显示第 ${(page - 1) * size + 1}〜${(page - 1) * size + shown.length} 件`)
+    : t(`${filtered.length} 件を表示`, `显示 ${filtered.length} 件`);
+
+  renderTable($("out"), [
+    { label: "日付", cls: "mid", render: (d) => fmtDateCell(d.r, d.s) },
+    { label: "大会", render: (d) => d.r.competitionId
+      ? `<a href="race.html?type=competition&id=${d.r.competitionId}">${esc(d.r.competitionName || "—")}</a>`
+      : esc(d.r.competitionName || "—") },
+    { label: "種目", cls: "mid", render: (d) => esc(store.itemLabel(d.r.item)) },
+    { label: "選手", cls: "name", render: (d) => d.s
+      ? `<a href="player.html?id=${d.s.id}">${esc(d.s.name)}</a>${d.sex === "女" ? ` <span class="badge pink">女子</span>` : ""}`
+      : "—" },
+    { label: "記録", cls: "num", render: (d) => d.r.isFinished === false
+      ? `<span class="badge dim">DNF</span>`
+      : `<span class="time">${scoreText(d.r)}</span>` },
+    { label: "順位", cls: "mid", render: (d) => d.r.rank
+      ? `<span class="badge ${d.r.rank === 1 ? "gold" : ""}">${d.r.rank}位</span>` : "—" },
+    { label: "組", cls: "mid", render: (d) => esc(d.r.group || "—") },
+    { label: "備考", render: (d) => remarkBadge(d.remark) },
+  ], shown, { empty: "条件に合う記録がありません" });
+
+  const p = $("pager");
+  p.textContent = "";
+  if (pages > 1) {
+    p.append(el("button", { class: "btn ghost", text: "‹ 前", disabled: page <= 1,
+      onclick: () => { page--; render(); window.scrollTo({ top: 0 }); } }));
+    p.append(el("span", { text: ` ${page} / ${pages} ` }));
+    p.append(el("button", { class: "btn ghost", text: "次 ›", disabled: page >= pages,
+      onclick: () => { page++; render(); window.scrollTo({ top: 0 }); } }));
+  }
+}
+
+function el(tag, attrs = {}) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v == null || v === false) continue;
+    if (k === "class") n.className = v;
+    else if (k === "text") n.textContent = v;
+    else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+    else if (v === true) n.setAttribute(k, "");
+    else n.setAttribute(k, v);
+  }
+  return n;
+}
+
+period = mountPeriod($("period"), (s) => { period = s; page = 1; apply(); });
+for (const id of ["item", "sex", "rank", "mark", "finish", "sort"]) {
+  $(id).addEventListener("change", () => { page = 1; apply(); });
+}
+$("size").addEventListener("change", () => { page = 1; render(); });
+document.addEventListener("langchange", () => render());
+let timer;
+for (const id of ["race", "player"]) {
+  $(id).addEventListener("input", () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => { page = 1; apply(); }, 250);
+  });
+}
+
+$("csv").onclick = () => {
+  const head = ["日付", "大会", "種目", "選手", "学年", "記録", "順位", "組", "備考"];
+  const lines = [head.join(",")].concat(filtered.map((d) => [
+    d.r.date || "", (d.r.competitionName || "").replace(/,/g, " "), store.itemLabel(d.r.item),
+    d.s ? d.s.name : "", gradeLabel(d.grade) || "", d.r.score || "", d.r.rank == null ? "" : d.r.rank,
+    d.r.group || "", (d.remark || "").replace(/,/g, " "),
+  ].join(",")));
+  const blob = new Blob(["\uFEFF" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `records_${$("item").value || "all"}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+apply();
+</script>
+</body>
+</html>
