@@ -10,12 +10,20 @@
 <header data-site-header></header>
 
 <main>
-  <div class="breadcrumb"><a href="index.html">概況</a> / 記録一覧</div>
+  <div class="breadcrumb"><a href="index.html">概況</a> / <span id="crumbCurrent">記録一覧</span></div>
   <section class="page-head">
-    <h1>記録一覧</h1>
-    <p>全部のレース記録を横断で検索できます。種目・期間・大会・選手・順位で絞り込み、記録順に並べ替えられます。</p>
+    <h1 id="pageTitle">記録一覧</h1>
+    <p id="pageLead">全部のレース記録を横断で検索できます。種目・期間・大会・選手・順位で絞り込み、記録順に並べ替えられます。</p>
   </section>
 
+  <div class="tabs view-tabs" id="viewTabs">
+    <button type="button" data-view="records" class="active">記録一覧</button>
+    <button type="button" data-view="competition">大会・記録会</button>
+    <button type="button" data-view="ekiden">駅伝</button>
+    <button type="button" data-view="major">三大駅伝</button>
+  </div>
+
+  <div id="recordsPanel">
   <section class="controls">
     <div class="field">
       <label>種目</label>
@@ -103,6 +111,26 @@
   <p class="footnote">
     ※ 記録は「その大会で青学の選手が残した成績」です。順位は大会内順位、備考は PB / SB / 区間賞など。
   </p>
+  </div>
+
+  <div id="racesPanel" hidden>
+    <div class="tabs" id="kindTabs" hidden></div>
+
+    <section class="controls" id="filterBar">
+      <div class="field"><label>年</label><select id="year"></select></div>
+      <div class="field" style="flex:1;min-width:220px"><label>検索</label><input type="search" id="q" placeholder="大会名で検索"></div>
+      <div class="field" style="margin-left:auto;align-self:flex-end"><span class="hint" id="count" style="color:var(--muted);font-size:12px"></span></div>
+    </section>
+
+    <section class="controls" id="monthBar">
+      <div class="field" style="flex:1;min-width:100%">
+        <label>月</label>
+        <div class="pill-row" id="months"></div>
+      </div>
+    </section>
+
+    <div class="card pad-0" id="raceOut"></div>
+  </div>
 </main>
 
 <footer data-site-footer></footer>
@@ -127,6 +155,60 @@ $("item").innerHTML = `<option value="">すべて</option>` +
   items.map((k) => `<option value="${k}">${store.itemLabel(k)}</option>`).join("");
 
 const params = new URLSearchParams(location.search);
+const requestedView = params.get("view");
+const legacyTab = params.get("tab");
+const requestedTab = requestedView === "races"
+  ? (["ekiden", "major"].includes(legacyTab) ? legacyTab : "competition")
+  : requestedView
+    ? requestedView
+    : legacyTab
+      ? (["ekiden", "major"].includes(legacyTab) ? legacyTab : "competition")
+      : "records";
+const VIEWS = ["records", "competition", "ekiden", "major"];
+let activeView = VIEWS.includes(requestedTab) ? requestedTab : "records";
+
+function updateViewHead() {
+  const isRecords = activeView === "records";
+  const labels = {
+    records: ["記録一覧", "记录一览"],
+    competition: ["大会・記録会", "大会・记录会"],
+    ekiden: ["駅伝", "驿传"],
+    major: ["三大駅伝", "三大驿传"],
+  };
+  const [jaLabel, zhLabel] = labels[activeView];
+  const label = t(jaLabel, zhLabel);
+  $("pageTitle").textContent = label;
+  $("crumbCurrent").textContent = label;
+  $("pageLead").textContent = isRecords
+    ? t("全部のレース記録を横断で検索できます。種目・期間・大会・選手・順位で絞り込み、記録順に並べ替えられます。",
+        "可横跨全部比赛成绩检索。按项目、期间、大会、选手、名次筛选，并按成绩排序。")
+    : t("青学が出場した大会・記録会・駅伝の一覧です。年度はシーズン（4/1〜翌3/31）単位なので、1月の箱根は前の年度に入ります。年度を選ぶと月ごとの件数が出るので、月をクリックして絞り込めます。",
+        "青学参加过的比赛・记录会・驿传一览。年度按赛季（4/1～次年 3/31）计算，所以 1 月的箱根算上一年度。选年度后会显示各月份件数，点月份即可筛选。")
+  document.title = `${jaLabel} | 青山学院大学 陸上競技部`;
+}
+
+function setView(view, updateUrl = true) {
+  activeView = VIEWS.includes(view) ? view : "records";
+  $("recordsPanel").hidden = activeView !== "records";
+  $("racesPanel").hidden = activeView === "records";
+  document.querySelectorAll("#viewTabs [data-view]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.view === activeView);
+    button.setAttribute("aria-selected", button.dataset.view === activeView ? "true" : "false");
+  });
+  updateViewHead();
+  document.dispatchEvent(new CustomEvent("recordsviewchange", { detail: { view: activeView } }));
+  if (updateUrl) {
+    const next = new URL(location.href);
+    next.searchParams.set("view", activeView);
+    next.searchParams.delete("tab");
+    history.replaceState(null, "", next);
+  }
+}
+
+document.querySelectorAll("#viewTabs [data-view]").forEach((button) => {
+  button.addEventListener("click", () => setView(button.dataset.view));
+});
+setView(activeView, false);
 
 // 搜索框候选词：选手名 / 大会名（输入一个字就能选）
 attachSuggestions($("player"), store.students.map((s) => s.name));
@@ -263,7 +345,7 @@ for (const id of ["item", "sex", "rank", "mark", "finish", "sort"]) {
   $(id).addEventListener("change", () => { page = 1; apply(); });
 }
 $("size").addEventListener("change", () => { page = 1; render(); });
-document.addEventListener("langchange", () => render());
+document.addEventListener("langchange", () => { updateViewHead(); render(); });
 let timer;
 for (const id of ["race", "player"]) {
   $(id).addEventListener("input", () => {
@@ -288,6 +370,212 @@ $("csv").onclick = () => {
 };
 
 apply();
+</script>
+
+<script type="module">
+import { loadStore, academicYear } from "./assets/store.js";
+import { mountLayout, setGeneratedAt, renderTable, fmtDate, qs, esc, attachSuggestions } from "./assets/ui.js";
+
+const store = await loadStore();
+mountLayout("records.html");
+setGeneratedAt(store.generatedAt);
+
+const initialParams = new URLSearchParams(location.search);
+const initialTab = initialParams.get("view") === "races"
+  ? (["ekiden", "major"].includes(initialParams.get("tab")) ? initialParams.get("tab") : "competition")
+  : (["competition", "ekiden", "major"].includes(initialParams.get("view"))
+      ? initialParams.get("view")
+      : (["ekiden", "major"].includes(initialParams.get("tab")) ? initialParams.get("tab") : "competition"));
+let tab = initialTab;
+const $year = document.getElementById("year");
+const $q = document.getElementById("q");
+const $filterBar = document.getElementById("filterBar");
+const $months = document.getElementById("months");
+const $monthBar = document.getElementById("monthBar");
+const $kindTabs = document.getElementById("kindTabs");
+const $raceOut = document.getElementById("raceOut");
+const MAJOR_RELAY_NAMES = ["箱根駅伝", "全日本大学駅伝", "出雲駅伝"];
+let relayKind = ["箱根駅伝", "全日本大学駅伝", "出雲駅伝", "other"].includes(qs("kind")) ? qs("kind") : "";
+let month = /^\d{4}-\d{1,2}$/.test(qs("month") || "")
+  ? qs("month").replace(/^(\d{4})-(\d)$/, "$1-0$2") : "";
+
+function all() {
+  if (tab === "competition") return store.competitionsSorted;
+  let list = store.ekidenRoundsSorted;
+  if (tab === "major") list = list.filter(isMajorRelay);
+  if (relayKind === "other") return list.filter((r) => !isMajorRelay(r));
+  if (relayKind) return list.filter((r) => relayNameOf(r) === relayKind);
+  return list;
+}
+
+const relayNameOf = (r) => (store.ekidenItemById.get(r.ekidenItemId) || {}).name || "";
+const isMajorRelay = (r) => MAJOR_RELAY_NAMES.includes(relayNameOf(r));
+
+function fillYears() {
+  if (tab === "major") {
+    $year.innerHTML = "";
+    $year.value = "";
+    return;
+  }
+  const seasons = [...new Set(all().map((r) => academicYear(r.date)).filter(Boolean))].sort((a, b) => b - a);
+  const prev = $year.value;
+  $year.innerHTML = `<option value="">すべての年度</option>`
+    + seasons.map((y) => `<option value="${y}">${y}年度</option>`).join("");
+  const want = qs("year");
+  const has = (v) => seasons.includes(Number(v));
+  $year.value = has(prev) ? prev : (want && has(want) ? want : (seasons[0] ?? ""));
+}
+
+function seasonMonths(season) {
+  const y = Number(season);
+  const out = [];
+  for (let m = 4; m <= 12; m++) out.push({ key: `${y}-${String(m).padStart(2, "0")}`, label: `${m}月` });
+  for (let m = 1; m <= 3; m++) out.push({ key: `${y + 1}-${String(m).padStart(2, "0")}`, label: `${m}月` });
+  return out;
+}
+
+function fillMonths() {
+  if (tab === "major") {
+    month = "";
+    $monthBar.hidden = true;
+    $months.innerHTML = "";
+    return;
+  }
+  const y = $year.value;
+  if (!y) { $monthBar.hidden = true; $months.innerHTML = ""; return; }
+  $monthBar.hidden = false;
+  const months = seasonMonths(y);
+  const counts = new Map(months.map((m) => [m.key, 0]));
+  let total = 0;
+  for (const r of all()) {
+    if (academicYear(r.date) !== Number(y)) continue;
+    total++;
+    const key = (r.date || "").slice(0, 7);
+    if (counts.has(key)) counts.set(key, counts.get(key) + 1);
+  }
+  const btn = (val, text, n) =>
+    `<button class="btn ghost ${val === month ? "active" : ""}" data-m="${val}"
+      style="${n ? "" : "opacity:.45"}">${text}<span style="opacity:.6;margin-left:5px">${n}</span></button>`;
+  $months.innerHTML = btn("", "シーズン", total)
+    + months.map((m) => btn(m.key, m.label, counts.get(m.key) || 0)).join("");
+  $months.querySelectorAll("[data-m]").forEach((button) =>
+    button.addEventListener("click", () => { month = button.dataset.m; fillMonths(); render(); }));
+}
+
+function label(r) {
+  if (tab !== "competition") {
+    const item = store.ekidenItemById.get(r.ekidenItemId);
+    return `${item ? item.name : "駅伝"} ${r.round}`;
+  }
+  return r.round && !r.name.includes(r.round) ? `${r.name} ${r.round}` : r.name;
+}
+
+function rows() {
+  if (tab === "major") return all();
+  const y = $year.value;
+  const q = $q.value.trim().toLowerCase();
+  return all().filter((r) => {
+    if (y && academicYear(r.date) !== Number(y)) return false;
+    if (y && month && (r.date || "").slice(0, 7) !== month) return false;
+    if (q && !label(r).toLowerCase().includes(q)) return false;
+    return true;
+  });
+}
+
+function render() {
+  const list = rows();
+  $filterBar.hidden = tab === "major";
+  renderKindTabs();
+  const scope = tab === "major"
+    ? ["三大駅伝", relayKind].filter(Boolean).join(" ／ ")
+    : [tab === "competition" ? "大会" : "駅伝",
+      $year.value ? `${$year.value}年度` : "全期間",
+      month ? `${month.slice(0, 4)}年${Number(month.slice(5))}月` : "",
+      relayKind === "other" ? "その他" : relayKind || ""].filter(Boolean).join(" ／ ");
+  document.getElementById("count").textContent = `${scope}：${list.length} 件`;
+  $raceOut.textContent = "";
+  if (tab === "competition") {
+    renderTable($raceOut, [
+      { label: "日付", cls: "mid", render: (r) => fmtDate(r.date) },
+      { label: "大会名", cls: "name", render: (r) => `<a href="race.html?type=competition&id=${r.id}">${esc(label(r))}</a>` },
+      { label: "記録数", cls: "num", render: (r) => {
+        const n = (store.recordsByCompetition.get(r.id) || []).length;
+        if (n) return n;
+        const k = r.ekidenRoundId ? (store.ekidenRecordsByRound.get(r.ekidenRoundId) || []).length : 0;
+        return k ? `${k} <span class="badge">駅伝</span>` : "0";
+      } },
+      { label: "主な種目", render: (r) => {
+        const items = [...new Set((store.recordsByCompetition.get(r.id) || []).map((x) => x.item))];
+        return items.slice(0, 4).map((i) => `<span class="badge">${store.itemLabel(i)}</span>`).join(" ") || "—";
+      } },
+      { label: "最高順位", cls: "mid", render: (r) => {
+        const recs = (store.recordsByCompetition.get(r.id) || []).filter((x) => x.rank);
+        if (!recs.length) return "—";
+        const best = Math.min(...recs.map((x) => x.rank));
+        return `<span class="badge ${best === 1 ? "gold" : ""}">${best}位</span>`;
+      } },
+    ], list, { empty: "該当する大会がありません" });
+  } else {
+    renderTable($raceOut, [
+      { label: "日付", cls: "mid", render: (r) => fmtDate(r.date) },
+      { label: "大会", cls: "name", render: (r) => `<a href="race.html?type=ekiden&id=${r.id}">${esc(label(r))}</a>` },
+      { label: "区間数", cls: "mid", render: (r) => r.intervalCount || (store.ekidenRecordsByRound.get(r.id) || []).length || "—" },
+      { label: "区間賞", cls: "mid", render: (r) => {
+        const n = (store.ekidenRecordsByRound.get(r.id) || []).filter((x) => x.rank === 1).length;
+        return n ? `<span class="badge gold">${n}</span>` : "—";
+      } },
+      { label: "チーム順位", cls: "mid", render: (r) => {
+        const recs = store.ekidenRecordsByRound.get(r.id) || [];
+        const ranks = recs.map((x) => x.teamRank).filter((x) => x != null);
+        return ranks.length ? `${Math.max(...ranks)}位` : "—";
+      } },
+    ], list, { empty: "該当する駅伝がありません" });
+  }
+}
+
+function renderKindTabs() {
+  $kindTabs.hidden = tab === "competition";
+  if (tab === "competition") { $kindTabs.innerHTML = ""; return; }
+  const items = [
+    { key: "", label: tab === "major" ? "三大駅伝すべて" : "すべての駅伝" },
+    ...MAJOR_RELAY_NAMES.map((name) => ({ key: name, label: name })),
+    ...(tab === "ekiden" ? [{ key: "other", label: "その他の駅伝" }] : []),
+  ];
+  $kindTabs.innerHTML = items.map((item) =>
+    `<button type="button" data-kind="${esc(item.key)}" class="${item.key === relayKind ? "active" : ""}">${esc(item.label)}</button>`).join("");
+  $kindTabs.querySelectorAll("[data-kind]").forEach((button) => {
+    button.addEventListener("click", () => {
+      relayKind = button.dataset.kind;
+      month = "";
+      fillYears();
+      fillMonths();
+      render();
+    });
+  });
+}
+
+document.addEventListener("recordsviewchange", (event) => {
+  const nextTab = event.detail.view;
+  if (!["competition", "ekiden", "major"].includes(nextTab)) return;
+  tab = nextTab;
+  relayKind = "";
+  month = "";
+  if (tab === "major") $q.value = "";
+  fillYears();
+  fillMonths();
+  render();
+  refreshSuggestions();
+});
+$year.addEventListener("change", () => { month = ""; fillMonths(); render(); });
+$q.addEventListener("input", render);
+
+function refreshSuggestions() {
+  attachSuggestions($q, [...all().map(label), ...store.competitions.map((c) => c.name)]);
+}
+refreshSuggestions();
+fillYears();
+fillMonths();
+render();
 </script>
 </body>
 </html>

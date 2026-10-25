@@ -190,16 +190,49 @@ table.ek-matrix td.rec .ek-pos,table.ek-matrix td.rec .ek-time{color:var(--dange
 .ek-key.r2{background:#e9edf0;color:#4a545c}
 .ek-key.r3{background:#f8e6d2;color:#8a5a2b}
 /* 三大駅伝 出場者：カードを並べる（PC=4列 / タブレット=2列 / 手机=1列） */
-#out.ek-grid{display:grid;gap:12px;grid-template-columns:repeat(4,minmax(0,1fr))}
-@media (max-width:1180px){#out.ek-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media (max-width:680px){#out.ek-grid{grid-template-columns:1fr}}
-#out.ek-grid .ek-card{font-size:12px}
-#out.ek-grid .card-title{flex-wrap:wrap;gap:2px}
-#out.ek-grid .card-title h3{font-size:14px}
-#out.ek-grid .card-title .hint{font-size:11px}
+#membersOut.ek-grid{display:grid;gap:12px;grid-template-columns:repeat(4,minmax(0,1fr));align-items:start}
+@media (max-width:1180px){#membersOut.ek-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:680px){#membersOut.ek-grid{grid-template-columns:1fr}}
+#membersOut.ek-grid .ek-card{min-width:0;font-size:12px}
+#membersOut.ek-grid .card-title{flex-wrap:wrap;gap:2px}
+#membersOut.ek-grid .card-title h3{font-size:14px}
+#membersOut.ek-grid .card-title .hint{font-size:11px}
+#membersOut.ek-grid table.ek-matrix{font-size:11px;border-spacing:2px}
+#membersOut.ek-grid table.ek-matrix th{padding:2px}
+#membersOut.ek-grid table.ek-matrix td.ek-cell{padding:4px 2px}
+#membersOut.ek-grid .ek-info{column-gap:6px}
 /* 三大駅伝 出場者：5000/10000/ハーフ/高校PB */
 .ek-info{display:grid;grid-template-columns:1fr 1fr;gap:2px 10px;padding:6px 12px 2px;font-size:11px;color:var(--ink)}
 .ek-info b{color:var(--muted);font-weight:600;margin-right:5px}
+/* 三大駅伝 総合成績：大会ごとの推移グラフ */
+.totals-charts{display:grid;gap:16px;grid-template-columns:repeat(3,minmax(0,1fr))}
+.totals-charts .card{margin:0}
+@media (max-width:1100px){.totals-charts{grid-template-columns:1fr}}
+/* 三大駅伝 総合成績：年度ごとの団体順位比較 */
+.team-rank-card{margin-bottom:16px;overflow:hidden}
+.team-rank-wrap{padding:0 8px 10px}
+.team-rank-table{min-width:620px;font-size:13px}
+.team-rank-table th,.team-rank-table td{text-align:center;padding:7px 10px}
+.team-rank-table tbody th{font-family:var(--mono);font-weight:700;color:var(--muted);white-space:nowrap}
+.team-rank-cell{display:inline-flex;align-items:baseline;justify-content:center;gap:6px;min-width:92px;padding:4px 8px;border-radius:7px}
+.team-rank-cell b{font-size:14px}
+.team-rank-cell small{font-size:10px;color:var(--muted);font-weight:500}
+.team-rank-cell:hover{background:var(--accent-soft);text-decoration:none}
+.team-rank-cell.rank-first{background:#fdf1c6;color:#7b5a08}
+.team-rank-cell.rank-first small{color:#8a6a12}
+.team-rank-missing{color:var(--muted)}
+/* 三大駅伝 総合成績：年度ごとのカード（details） */
+details.edition{border:1px solid var(--line)}
+details.edition > summary{cursor:pointer;padding:11px 16px;display:flex;gap:12px;flex-wrap:wrap;align-items:center;font-size:13px;list-style:none}
+details.edition > summary::-webkit-details-marker{display:none}
+details.edition > summary::before{content:"▸";color:var(--muted);font-size:11px}
+details.edition[open] > summary::before{content:"▾"}
+.edition-round{font-weight:800}
+.edition-date{color:var(--muted);font-size:12px}
+.edition-total{font-weight:700}
+.edition-pace{color:var(--muted);font-family:var(--mono);font-size:12px}
+.edition-head .btn{margin-left:auto}
+details.edition.row-current{border-color:var(--accent);box-shadow:inset 3px 0 0 var(--accent);background:#f6fbf8}
 /* 選手ページ上段：左＝プロフィール／右＝三大駅伝 出場 */
 .player-top{display:grid;gap:16px;grid-template-columns:minmax(300px,.8fr) minmax(420px,1.2fr);align-items:start;margin:18px 0}
 .player-top.single{grid-template-columns:1fr}
@@ -290,6 +323,8 @@ table.data tbody tr:hover > td{background:var(--accent-soft)}
   padding:9px 12px;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;
 }
 .tabs button.active{color:var(--accent-ink);border-bottom-color:var(--accent)}
+.tabs.view-tabs{gap:24px;margin-bottom:16px}
+.tabs.view-tabs button{font-size:14px;padding:10px 3px}
 .pill-row{display:flex;gap:8px;flex-wrap:wrap}
 .kbd{font-family:var(--mono);font-size:11px;background:var(--line-2);border:1px solid var(--line);border-radius:4px;padding:1px 5px}
 .demo-banner{

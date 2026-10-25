@@ -3,41 +3,31 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>三大駅伝 区間別ランキング | 青山学院大学 陸上競技部</title>
+<title>三大駅伝 | 青山学院大学 陸上競技部</title>
 <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
 <header data-site-header></header>
 
 <main>
-  <div class="breadcrumb"><a href="index.html">概況</a> / 三大駅伝 区間別</div>
+  <div class="breadcrumb"><a href="index.html">概況</a> / 三大駅伝</div>
   <section class="page-head">
-    <h1>三大駅伝 区間別ランキング</h1>
-    <p>箱根・全日本・出雲の全区間を、歴代の青学選手の記録で並べたランキング。区間距離は大会の改道で変わるため、距離ごとに別のランキングに分けています。</p>
+    <h1 id="pageTitle">三大駅伝</h1>
+    <p id="pageLead">箱根・全日本・出雲の全区間を、歴代の青学選手の記録で並べたランキング。区間距離は大会の改道で変わるため、距離ごとに別のランキングに分けています。</p>
   </section>
 
-  <section class="controls">
+  <!-- 第1层：页面级切换（区間別 / 総合成績） -->
+  <div class="tabs" id="modeTabs">
+    <button type="button" data-mode="interval" class="active">区間別ランキング</button>
+    <button type="button" data-mode="total">総合成績・比較</button>
+    <button type="button" data-mode="members">出場者</button>
+  </div>
+
+  <!-- 第2层：大会（三大駅伝） -->
+  <section class="controls" id="relayControls">
     <div class="field">
       <label>大会</label>
       <div class="pill-row" id="relayTabs"></div>
-    </div>
-    <div class="field">
-      <label>並び順</label>
-      <select id="sortBy">
-        <option value="time">記録（速い順）</option>
-        <option value="pace">ペース（速い順）</option>
-      </select>
-    </div>
-    <div class="field">
-      <label>距離</label>
-      <select id="distFilter"><option value="">すべて</option></select>
-    </div>
-    <div class="field">
-      <label>表示</label>
-      <select id="scope">
-        <option value="all">歴代全員</option>
-        <option value="active">現役のみ</option>
-      </select>
     </div>
     <div class="field" style="margin-left:auto;align-self:flex-end">
       <label style="visibility:hidden">·</label>
@@ -45,7 +35,30 @@
     </div>
   </section>
 
-  <section class="card" style="margin-bottom:14px;padding:12px 16px">
+  <!-- 第3层：区間別だけの絞り込み -->
+  <section class="controls" id="detailControls">
+    <div class="field" id="sortField">
+      <label>並び順</label>
+      <select id="sortBy">
+        <option value="record">記録（速い順）</option>
+        <option value="round_desc">届数（新しい順）</option>
+        <option value="round_asc">届数（古い順）</option>
+      </select>
+    </div>
+    <div class="field" id="distField">
+      <label>距離</label>
+      <select id="distFilter"><option value="">すべて</option></select>
+    </div>
+    <div class="field" id="scopeField">
+      <label>表示</label>
+      <select id="scope">
+        <option value="all">歴代全員</option>
+        <option value="active">現役のみ</option>
+      </select>
+    </div>
+  </section>
+
+  <section class="card" id="legendCard" style="margin-bottom:14px;padding:12px 16px">
     <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--muted)">
       <span class="hint">🟩 <b style="color:var(--ink)">緑の行</b>＝今季（<span id="seasonLabel">—</span>）の記録</span>
       <span class="hint">ペース = 区間記録 ÷ 距離（1kmあたり・小数第1位まで）</span>
@@ -56,21 +69,67 @@
     </div>
   </section>
 
+  <!-- 出場者モードの絞り込み -->
+  <section class="controls" id="memberControls" hidden>
+    <div class="field">
+      <label>性別</label>
+      <div class="pill-row" id="mSexTabs"></div>
+    </div>
+    <div class="field">
+      <label>対象</label>
+      <select id="mScope">
+        <option value="all">歴代全員</option>
+        <option value="active">現役のみ</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>入学年</label>
+      <select id="mYear"><option value="">すべて</option></select>
+    </div>
+    <div class="field">
+      <label>並び順</label>
+      <select id="mSort">
+        <option value="year">入学年（新しい順）</option>
+        <option value="runs">出走回数（多い順）</option>
+        <option value="name">氏名順</option>
+      </select>
+    </div>
+    <div class="field" style="flex:1;min-width:180px">
+      <label>検索</label>
+      <input type="search" id="mQ" placeholder="氏名で検索">
+    </div>
+    <div class="field" style="margin-left:auto;align-self:flex-end">
+      <span class="hint" id="mCount" style="font-size:12px"></span>
+    </div>
+  </section>
+
+  <section class="card" id="memberLegend" hidden style="margin-bottom:14px;padding:12px 16px">
+    <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--muted);align-items:center">
+      <span>区間順位：<b class="ek-key r1">1位</b> <b class="ek-key r2">2位</b> <b class="ek-key r3">3位</b> ／ 4位以下は色なし</span>
+      <span><b style="color:var(--danger)">赤字</b>＝区間新記録</span>
+      <span id="mCoverage"></span>
+    </div>
+  </section>
+
   <div id="out"></div>
+  <div id="membersOut" class="ek-grid" hidden></div>
 </main>
 
 <footer data-site-footer></footer>
 
 <script type="module">
-import { loadStore, formatScore, currentSeason, scoreText } from "./assets/store.js";
+import { loadStore, formatScore, currentSeason, academicYear, scoreText } from "./assets/store.js";
 import { mountLayout, setGeneratedAt, renderTable, fmtDate, gradeLabel, esc, qs } from "./assets/ui.js";
+import { lineChart } from "./assets/charts.js";
 import { t } from "./assets/i18n.js";
+import { MAJOR_RELAYS, majorRecords, ekidenMatrixHtml } from "./assets/ekiden-matrix.js";
 
 const store = await loadStore();
 mountLayout("ekiden-interval.html");
 setGeneratedAt(store.generatedAt);
 
 const season = currentSeason();
+const todayISO = new Date().toISOString().slice(0, 10);
 document.getElementById("seasonLabel").textContent = season.label;
 
 /**
@@ -121,7 +180,12 @@ const RELAYS = [
   },
 ];
 
-let relayIndex = Math.max(0, RELAYS.findIndex((r) => r.key === qs("relay")));
+const qRelay = qs("relay");
+let relayIndex = Math.max(0, RELAYS.findIndex((r) => r.key === qRelay));
+// 表示モード：区間別 / 総合成績（全大会の総合記録と、大会をまたいだ比較）
+let mode = ["total", "members"].includes(qs("mode")) ? qs("mode") : "interval";
+// 総合成績モードの大会タブ：-1 = すべて（?relay= が来ていればその大会）
+let totalRelay = qRelay && RELAYS.some((r) => r.key === qRelay) ? relayIndex : -1;
 
 /**
  * 回ごとの特記事項。一覧では短いバッジ（マウスを乗せると全文）で表示する。
@@ -199,10 +263,130 @@ function rangeNote(roundNos) {
 
 function renderTabs() {
   const el = document.getElementById("relayTabs");
+  if (mode === "total") {
+    el.innerHTML = `<button class="btn ghost ${totalRelay === -1 ? "active" : ""}" data-i="-1">${t("すべて", "全部")}</button>`
+      + RELAYS.map((r, i) => `<button class="btn ghost ${i === totalRelay ? "active" : ""}" data-i="${i}">${r.key}</button>`).join("");
+    el.querySelectorAll("[data-i]").forEach((b) =>
+      b.addEventListener("click", () => { totalRelay = Number(b.dataset.i); render(); }));
+    return;
+  }
   el.innerHTML = RELAYS.map((r, i) =>
     `<button class="btn ghost ${i === relayIndex ? "active" : ""}" data-i="${i}">${r.key}</button>`).join("");
   el.querySelectorAll("[data-i]").forEach((b) =>
     b.addEventListener("click", () => { relayIndex = Number(b.dataset.i); render(); }));
+}
+
+function renderModeTabs() {
+  document.querySelectorAll("#modeTabs [data-mode]").forEach((b) => {
+    b.classList.toggle("active", b.dataset.mode === mode);
+    b.onclick = () => { if (mode === b.dataset.mode) return; mode = b.dataset.mode; render(); };
+  });
+}
+
+// ---------- 出場者モード ----------
+const MEMBER_RELAY_IDS = () => MAJOR_RELAYS.map((r) => {
+  const item = store.ekidenItems.find((i) => r.match.test(i.name));
+  return { ...r, itemId: item ? item.id : null };
+});
+let memberSex = qs("sex") === "女" ? "女" : "男";
+
+/** 三大駅伝に出場した選手（出場回数つき） */
+function memberCollect() {
+  const byStudent = new Map();
+  for (const s of store.students) {
+    const list = majorRecords(store, s.id);
+    if (!list.length) continue;
+    const count = {};
+    for (const x of list) count[x.relay] = (count[x.relay] || 0) + 1;
+    byStudent.set(s.id, { student: s, count });
+  }
+  return byStudent;
+}
+
+function renderMemberCoverage() {
+  const parts = MEMBER_RELAY_IDS().map(({ key, itemId }) => {
+    const rounds = store.ekidenRounds.filter((r) => r.ekidenItemId === itemId);
+    if (!rounds.length) return null;
+    const first = rounds.slice().sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")))[0];
+    return `${key} ${first.round}（${String(first.date).slice(0, 4)}年）〜`;
+  }).filter(Boolean);
+  document.getElementById("mCoverage").innerHTML = `収録データ：${esc(parts.join(" ／ "))}`;
+}
+
+function renderMemberSexTabs() {
+  const n = (k) => store.studentsBySex(k).length;
+  const el = document.getElementById("mSexTabs");
+  el.innerHTML = ["男", "女"].map((k) =>
+    `<button type="button" class="btn ghost${k === memberSex ? " active" : ""}" data-msex="${k}">${k === "男" ? "男子" : "女子"} <span style="opacity:.6">${n(k)}</span></button>`
+  ).join("");
+  el.querySelectorAll("[data-msex]").forEach((b) =>
+    b.addEventListener("click", () => { memberSex = b.dataset.msex; renderMembers(); }));
+}
+
+function renderMemberYears() {
+  const years = [...new Set(store.studentsBySex(memberSex).map((s) => s.enrollmentYear).filter(Boolean))].sort().reverse();
+  const sel = document.getElementById("mYear");
+  const cur = sel.value;
+  sel.innerHTML = `<option value="">${t("すべて", "全部")}</option>`
+    + years.map((y) => `<option value="${y}">${y}年</option>`).join("");
+  if (years.includes(cur)) sel.value = cur;
+}
+
+function memberList() {
+  const byStudent = memberCollect();
+  let rows = [...byStudent.values()];
+  rows = rows.filter((x) => (x.student.sex || "男") === memberSex);
+  const scope = document.getElementById("mScope").value;
+  const activeIds = new Set(store.rosterAsOf(todayISO).map((s) => s.id));
+  if (scope === "active") rows = rows.filter((x) => activeIds.has(x.student.id));
+  const y = document.getElementById("mYear").value;
+  if (y) rows = rows.filter((x) => String(x.student.enrollmentYear) === y);
+  const q = document.getElementById("mQ").value.trim().toLowerCase();
+  if (q) rows = rows.filter((x) => (x.student.name + (x.student.kanaName || "")).toLowerCase().includes(q));
+  const runs = (x) => MAJOR_RELAYS.reduce((n, r) => n + (x.count[r.key] || 0), 0);
+  const byYear = (a, b) => String(b.student.enrollmentYear || "").localeCompare(String(a.student.enrollmentYear || ""))
+    || a.student.name.localeCompare(b.student.name, "ja");
+  const sortKey = document.getElementById("mSort").value;
+  if (sortKey === "runs") return rows.sort((a, b) => runs(b) - runs(a) || byYear(a, b));
+  if (sortKey === "name") return rows.sort((a, b) => a.student.name.localeCompare(b.student.name, "ja"));
+  return rows.sort(byYear);
+}
+
+function renderMembers() {
+  renderMemberSexTabs();
+  renderMemberYears();
+  const rows = memberList();
+  document.getElementById("mCount").textContent = `${rows.length} ${t("名", "人")}`;
+  const out = document.getElementById("membersOut");
+  out.textContent = "";
+  if (!rows.length) { out.innerHTML = `<div class="card empty">${t("該当する選手がいません", "没有符合条件的选手")}</div>`; return; }
+  const activeIds = new Set(store.rosterAsOf(todayISO).map((s) => s.id));
+  for (const { student, count } of rows) {
+    const counts = MAJOR_RELAYS.map((r) => count[r.key] ? `${r.key}${count[r.key]}回` : null)
+      .filter(Boolean).join("・");
+    const bestOf = (item) => store.pbAsOf(student.id, item, null, { include: "enrolled" });
+    const hsRec = (store.recordsByStudent.get(student.id) || [])
+      .find((x) => x.item === "five_5000m" && /高校時代/.test((x.remark || "") + (x.competitionName || "")));
+    const hsPb = student.enrollment5000m || (hsRec ? scoreText(hsRec) : null);
+    const pbText = (rec) => (rec ? scoreText(rec) : "—");
+    const infoRows = [
+      ["5000m", pbText(bestOf("five_5000m"))],
+      ["10000m", pbText(bestOf("ten_10000m"))],
+      ["ハーフ", pbText(bestOf("half_marathon"))],
+      ["高校PB", hsPb || "—"],
+    ].map(([label, v]) => `<span><b>${label}</b>${esc(v)}</span>`).join("");
+    const card = document.createElement("section");
+    card.className = "card pad-0 ek-card";
+    card.innerHTML = `<div class="card-title" style="padding:12px 12px 0">
+        <h3><a href="player.html?id=${student.id}">${esc(student.name)}</a></h3>
+        <span class="hint">${student.enrollmentYear || "—"}年入学${(student.sex || "男") === "女" ? " ／ 女子" : ""}
+          ／ ${activeIds.has(student.id) ? gradeLabel(store.gradeAt(student, todayISO)) || "在籍" : "OB"}${counts ? ` ／ ${esc(counts)}` : ""}</span>
+      </div>
+      <div class="ek-info">${infoRows}</div>
+      <div style="padding:0 8px 10px">${ekidenMatrixHtml(store, student.id)}</div>`;
+    out.append(card);
+  }
+  renderMemberCoverage();
 }
 
 function recordsFor(relay) {
@@ -239,19 +423,217 @@ function currentDistance(rows) {
   return m;
 }
 
+/** 大会ごとの「総合成績」（全区間の合計タイム） */
+function relayTotals(relay) {
+  const item = store.ekidenItems.find((i) => relay.match.test(i.name));
+  if (!item) return [];
+  const rounds = store.ekidenRounds.filter((r) => r.ekidenItemId === item.id);
+  const out = [];
+  for (const round of rounds) {
+    const recs = store.ekidenRecordsByRound.get(round.id) || [];
+    const valid = recs.filter((r) => r.seconds != null);
+    if (!valid.length) continue;
+    const total = valid.reduce((n, r) => n + r.seconds, 0);
+    const dist = recs.reduce((n, r) => n + (kmOf(r.distance) || 0), 0);
+    out.push({
+      relay, round, recs, valid, total, dist,
+      pace: dist ? total / dist : null,
+      teamRank: recs.map((r) => r.teamRank).filter((x) => x != null).pop() ?? null,
+      awards: recs.filter((r) => r.rank === 1).length,
+      current: round.date >= season.from && round.date <= season.to,
+    });
+  }
+  return out.sort((a, b) => String(a.round.date).localeCompare(String(b.round.date)));
+}
+
+const legendHtml = document.getElementById("legendCard").innerHTML;
+
+function renderLegend() {
+  const el = document.getElementById("legendCard");
+  if (mode === "total") {
+    el.innerHTML = `<div style="display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--muted)">
+      <span>${t("総合記録＝その大会の全区間を走った合計タイム（箱根10・全日本8・出雲6）", "综合成绩＝该大会全部区间的合计时间（箱根10・全日本8・出云6）")}</span>
+      <span>${t("平均ペース＝総合記録 ÷ 総距離。大会が違っても同じ軸で比べられます", "平均配速＝综合成绩 ÷ 总距离。不同大会也能在同一坐标比较")}</span>
+      <span>${t("団体順位＝各大会の青学総合順位", "团体名次＝各大会青学的综合名次")}</span>
+      <span>${t("🟩 緑の行＝今季の大会", "🟩 绿色行＝本赛季的大会")}</span>
+    </div>`;
+    return;
+  }
+  el.innerHTML = legendHtml;
+  const sl = document.getElementById("seasonLabel");
+  if (sl) sl.textContent = season.label;
+}
+
+/** 総合成績モード：年度ごとに三大駅伝の団体順位を横並びで比較 */
+function teamRankComparison(list) {
+  const bySeason = new Map();
+  for (const item of list) {
+    const year = academicYear(item.round.date);
+    if (year == null) continue;
+    if (!bySeason.has(year)) bySeason.set(year, {});
+    bySeason.get(year)[item.relay.key] = item;
+  }
+  const seasons = [...bySeason.entries()].sort((a, b) => b[0] - a[0]);
+  const cell = (item) => {
+    if (!item) return `<span class="team-rank-missing">—</span>`;
+    if (!item.teamRank) return `<span class="team-rank-missing">—</span>`;
+    return `<a class="team-rank-cell${item.teamRank === 1 ? " rank-first" : ""}"
+        href="race.html?type=ekiden&id=${item.round.id}"
+        title="${esc(item.relay.key)} ${esc(item.round.round)}：${item.teamRank}位">
+        <b>${item.teamRank}位</b><small>${esc(item.round.round)}</small>
+      </a>`;
+  };
+  const card = document.createElement("section");
+  card.className = "card pad-0 team-rank-card";
+  card.innerHTML = `<div class="card-title" style="padding:16px 16px 0">
+      <h3>${t("団体順位の年度別比較", "团体名次按年度对比")}</h3>
+      <span class="hint">${t("箱根・全日本・出雲の青学総合順位", "箱根・全日本・出云青学综合名次")}</span>
+    </div>
+    <div class="table-wrap team-rank-wrap">
+      <table class="data team-rank-table">
+        <thead><tr><th>${t("年度", "年度")}</th>${RELAYS.map((relay) => `<th>${esc(relay.key)}</th>`).join("")}</tr></thead>
+        <tbody>${seasons.map(([year, ranks]) => `<tr>
+          <th scope="row">${year}${t("年度", "年度")}</th>
+          ${RELAYS.map((relay) => `<td>${cell(ranks[relay.key])}</td>`).join("")}
+        </tr>`).join("")}</tbody>
+      </table>
+    </div>`;
+  $out.append(card);
+}
+
+/** 総合成績モード：全大会の総合記録一覧＋大会をまたいだ比較 */
+function renderTotals() {
+  const relays = totalRelay < 0 ? RELAYS : [RELAYS[totalRelay]];
+  const list = relays.flatMap((r) => relayTotals(r))
+    .sort((a, b) => String(b.round.date).localeCompare(String(a.round.date)));
+  list.forEach((x) => { x.__cls = x.current ? "row-current" : ""; });
+  $out.textContent = "";
+
+  if (totalRelay < 0) teamRankComparison(list);
+
+  // 1) 平均ペースの推移（大会が違っても同じ軸で比べられる）
+  const paceSeries = RELAYS.map((relay) => ({
+    name: relay.key,
+    points: relayTotals(relay).filter((x) => x.pace != null)
+      .map((x) => ({ x: x.round.date, y: x.pace, meta: x })),
+  })).filter((s) => s.points.length);
+  const paceCard = document.createElement("section");
+  paceCard.className = "card";
+  paceCard.style.marginBottom = "16px";
+  paceCard.innerHTML = `<div class="card-title">
+      <h3>${t("平均ペースの推移（大会別）", "平均配速推移（按大会）")}</h3>
+      <span class="hint">${t("総合記録 ÷ 総距離。大会が違っても同じ軸で比べられます", "综合成绩 ÷ 总距离。不同大会也能在同一坐标比较")}</span>
+    </div><div id="paceChart"></div>`;
+  $out.append(paceCard);
+  lineChart(paceCard.querySelector("#paceChart"), {
+    series: paceSeries,
+    formatY: (v) => fmtPace(v),
+    tooltip: (p) => `<div style="opacity:.7">${p.meta.round.date} ／ ${esc(p.meta.relay.key)} ${esc(p.meta.round.round)}</div>
+      <div><b>${fmtPace(p.y)}/km</b></div>
+      <div style="opacity:.7">${t("総合", "综合")} ${formatScore(p.meta.total, false)}${p.meta.teamRank ? ` ／ ${t("団体", "团体")} ${p.meta.teamRank}位` : ""}</div>`,
+    emptyText: t("データがありません", "没有数据"),
+  });
+
+  // 2) 大会ごとの総合成績＋全区間（年度の新しい順）
+  if (!list.length) {
+    $out.insertAdjacentHTML("beforeend", `<div class="card empty">${t("データがありません", "没有数据")}</div>`);
+    return;
+  }
+  for (const x of list) {
+    const recs = x.recs.filter((r) => r.interval != null)
+      .sort((a, b) => a.interval - b.interval);
+    const details = document.createElement("details");
+    details.className = "card pad-0 edition" + (x.current ? " row-current" : "");
+    details.open = true;
+    details.style.marginBottom = "12px";
+    details.innerHTML = `<summary class="edition-head">
+        <span class="edition-round">${esc(x.relay.key)} ${esc(x.round.round)}</span>
+        <span class="edition-date">${fmtDate(x.round.date)}</span>
+        <span class="edition-total">${t("総合", "综合")} <b class="time">${formatScore(x.total, false)}</b></span>
+        <span class="edition-pace">${x.pace ? `${fmtPace(x.pace)}/km` : ""}</span>
+        ${x.teamRank ? `<span class="badge ${x.teamRank === 1 ? "gold" : ""}">${t("団体", "团体")} ${x.teamRank}位</span>` : ""}
+        ${x.awards ? `<span class="badge gold">${t("区間賞", "区间奖")} ${x.awards}</span>` : ""}
+        <a class="btn ghost mini" href="race.html?type=ekiden&id=${x.round.id}">${t("詳細", "详情")} →</a>
+      </summary>
+      <div class="body" style="padding:0 4px 8px"></div>`;
+    $out.append(details);
+    renderTable(details.querySelector(".body"), [
+      { label: "区間", cls: "mid", render: (r) => `${r.interval}区` },
+      { label: "選手", cls: "name", render: (r) => {
+        const s = store.student(r.studentId);
+        return s ? `<a href="player.html?id=${s.id}">${esc(s.name)}</a>` : "—";
+      } },
+      { label: "学年", cls: "mid", render: (r) => gradeLabel(store.gradeOfRecord(r, store.student(r.studentId))) },
+      { label: "距離", cls: "num", render: (r) => esc(r.distance || "—") },
+      { label: "区間記録", cls: "num", render: (r) => `<span class="time">${scoreText(r)}</span>` },
+      { label: "ペース", cls: "num", render: (r) => {
+        const d = kmOf(r.distance);
+        return d && r.seconds ? `<span class="time" style="color:var(--muted)">${fmtPace(r.seconds / d)}/km</span>` : "—";
+      } },
+      { label: "区間順位", cls: "mid", render: (r) => r.rank
+        ? `<span class="badge ${r.rank === 1 ? "gold" : ""}">${r.rank}位</span>` : "—" },
+    ], recs, { empty: t("記録がありません", "没有记录") });
+  }
+}
+
 function render() {
+  renderModeTabs();
+  const isTotal = mode === "total";
+  const isMembers = mode === "members";
+  document.getElementById("detailControls").hidden = isTotal || isMembers;
+  document.getElementById("sortField").hidden = isTotal || isMembers;
+  document.getElementById("distField").hidden = isTotal || isMembers;
+  document.getElementById("scopeField").hidden = isTotal || isMembers;
+  document.getElementById("relayControls").hidden = isMembers;
+  document.getElementById("memberControls").hidden = !isMembers;
+  document.getElementById("memberLegend").hidden = !isMembers;
+  document.getElementById("out").hidden = isMembers;
+  document.getElementById("membersOut").hidden = !isMembers;
+  document.getElementById("legendCard").hidden = isMembers;
+  document.getElementById("pageTitle").textContent = isTotal
+    ? t("三大駅伝 総合成績・比較", "三大驿传 综合成绩・对比")
+    : isMembers
+      ? t("三大駅伝 出場者", "三大驿传出场者")
+      : t("三大駅伝", "三大驿传");
+  document.getElementById("pageLead").textContent = isTotal
+    ? t("箱根・全日本・出雲の各大会を新しい年度から並べ、総合成績と全区間の記録・区間順位をまとめて見られます。平均ペースで大会をまたいだ比較もできます。",
+        "把箱根・全日本・出云的各届按年度从新到旧排列，同时看综合成绩和全部区间的成绩、区间排名。也能用平均配速跨大会比较。")
+    : isMembers
+      ? t("箱根・全日本・出雲に一度でも出場した選手を、学年ごとにまとめました。区間1〜3位は色付き、区間新記録は赤字です。",
+          "把至少参加过一次箱根・全日本・出云的选手按学年汇总。区间前 3 名有底色，区间新纪录用红字。")
+      : t("箱根・全日本・出雲の全区間を、歴代の青学選手の記録で並べたランキング。区間距離は大会の改道で変わるため、距離ごとに別のランキングに分けています。",
+          "把箱根・全日本・出云的每个区间按历代青学选手的成绩排名。区间距离会因改道而变化，因此按距离分开排行。");
+  renderLegend();
   renderTabs();
+  if (isTotal) return renderTotals();
+  if (isMembers) return renderMembers();
   const relay = RELAYS[relayIndex];
   let rows = recordsFor(relay);
   const curDist = currentDistance(rows);
 
   // 距離の選択肢（登場した距離を長い順に）
+  // 同じ距離が「現行の何区」「旧コースの何区」かを添える（例：19.7km（8区）／14.6km（旧1区））
   const dists = [...new Set(rows.map((r) => r.record.distance).filter(Boolean))]
     .sort((a, b) => (kmOf(b) || 0) - (kmOf(a) || 0));
+  const distUses = new Map();
+  for (const r of rows) {
+    const d = r.record.distance;
+    if (!d) continue;
+    const iv = r.record.interval;
+    const isNow = d === (curDist.get(iv) || {}).distance;
+    if (!distUses.has(d)) distUses.set(d, []);
+    const list = distUses.get(d);
+    if (!list.some((x) => x.iv === iv)) list.push({ iv, old: !isNow });
+  }
+  const distLabel = (d) => {
+    const parts = (distUses.get(d) || []).slice().sort((a, b) => a.iv - b.iv)
+      .map((x) => `${x.old ? t("旧", "旧") : ""}${x.iv}${t("区", "区")}`);
+    return parts.length ? `${d}（${parts.join("・")}）` : d;
+  };
   const keep = $dist.value;
   $dist.innerHTML = `<option value="">${t("すべて", "全部")}</option>
     <option value="__current">${t("現在のコース", "当前赛道")}</option>`
-    + dists.map((d) => `<option value="d:${esc(d)}">${esc(d)}</option>`).join("");
+    + dists.map((d) => `<option value="d:${esc(d)}">${esc(distLabel(d))}</option>`).join("");
   if ([...$dist.options].some((o) => o.value === keep)) $dist.value = keep;
 
   if ($scope.value === "active") rows = rows.filter((r) => r.active);
@@ -272,7 +654,7 @@ function render() {
     return;
   }
 
-  const byPace = $sortBy.value === "pace";
+  const sortMode = $sortBy.value;   // record / round_desc / round_asc
   for (const iv of intervals) {
     const list0 = rows.filter((r) => r.record.interval === iv);
     // 距离ごとに分ける（＝改道前/改道後は別のランキング）
@@ -287,13 +669,13 @@ function render() {
     const nowDist = (curDist.get(iv) || {}).distance;
 
     for (const [dist, list] of ordered) {
-      list.sort((a, b) => {
-        const av = byPace ? (a.pace ?? Infinity) : a.record.seconds;
-        const bv = byPace ? (b.pace ?? Infinity) : b.record.seconds;
-        return av - bv;
-      });
-      list.forEach((r, i) => { r.rank = i + 1; r.__cls = r.current ? "row-current" : ""; });
-      const best = list[0];
+      // 順位は常に「記録が速い順」でつける（並び順を届数にしても順位は変わらない）
+      const ranked = list.slice().sort((a, b) => a.record.seconds - b.record.seconds);
+      ranked.forEach((r, i) => { r.rank = i + 1; r.__cls = r.current ? "row-current" : ""; });
+      const best = ranked[0];
+      // 表示順：記録順 or 届数順（新しい↔古い）
+      const display = sortMode === "record" ? ranked
+        : list.slice().sort((a, b) => (sortMode === "round_asc" ? 1 : -1) * ((a.roundNo ?? 0) - (b.roundNo ?? 0)));
       const note = eraNote(relay, iv, kmOf(dist)) || rangeNote(list.map((r) => r.roundNo));
       const isNow = dist === nowDist;
 
@@ -329,7 +711,7 @@ function render() {
           ? `<span class="badge ${r.record.rank === 1 ? "gold" : ""}">${r.record.rank}位</span>` : "—" },
         { label: "差", cls: "num", render: (r) => r === best ? "—"
           : `<span class="time" style="color:var(--muted)">+${(r.record.seconds - best.record.seconds).toFixed(2)}</span>` },
-      ], list, { empty: t("記録がありません", "没有记录") });
+      ], display, { empty: t("記録がありません", "没有记录") });
     }
   }
 }
@@ -337,6 +719,9 @@ function render() {
 $sortBy.addEventListener("change", render);
 $scope.addEventListener("change", render);
 $dist.addEventListener("change", render);
+["mScope", "mYear", "mSort"].forEach((id) =>
+  document.getElementById(id).addEventListener("change", render));
+document.getElementById("mQ").addEventListener("input", render);
 document.addEventListener("langchange", () => render());
 render();
 </script>

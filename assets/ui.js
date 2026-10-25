@@ -7,9 +7,7 @@ const NAV = [
   { href: "rankings.html", label: "時点ランキング" },
   { href: "best.html", label: "自己ベスト" },
   { href: "players.html", label: "部員" },
-  { href: "races.html", label: "大会・記録会" },
-  { href: "ekiden-interval.html", label: "駅伝区間別" },
-  { href: "ekiden-members.html", label: "三大駅伝 出場者" },
+  { href: "ekiden-interval.html", label: "三大駅伝" },
   { href: "records.html", label: "記録一覧" },
   { href: "about.html", label: "このサイトについて" },
 ];

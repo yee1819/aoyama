@@ -554,17 +554,25 @@ async function loadRaw() {
 }
 
 let _store = null;
+let _storePromise = null;
 export async function loadStore() {
   if (_store) return _store;
-  _store = new Store(await loadRaw());
-  // 防止把演示数据误当成真实数据：明确提示
-  if (_store.meta && _store.meta.source === "demo") {
-    const bar = document.createElement("div");
-    bar.className = "demo-banner";
-    bar.textContent = "現在はデモデータを表示しています（実在の選手・記録ではありません）。node tools/sync.mjs で実データに差し替えられます。";
-    (document.querySelector("main") || document.body).prepend(bar);
+  if (!_storePromise) {
+    _storePromise = (async () => {
+      const store = new Store(await loadRaw());
+      // 防止把演示数据误当成真实数据：明确提示
+      if (store.meta && store.meta.source === "demo") {
+        const bar = document.createElement("div");
+        bar.className = "demo-banner";
+        bar.textContent = "現在はデモデータを表示しています（実在の選手・記録ではありません）。node tools/sync.mjs で実データに差し替えられます。";
+        (document.querySelector("main") || document.body).prepend(bar);
+      }
+      _store = store;
+      return store;
+    })();
+    _storePromise.catch(() => { _storePromise = null; });
   }
-  return _store;
+  return _storePromise;
 }
 
 function arr(x) {
