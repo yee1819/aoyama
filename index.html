@@ -40,6 +40,7 @@
       <button class="btn" id="goBtn">その時点を見る</button>
       <div class="field">
         <label>よく使う時点</label>
+        <span class="hint" style="font-size:11px">直近の三大駅伝</span>
         <div class="quick-dates" id="quickDates"></div>
       </div>
     </div>
@@ -109,19 +110,25 @@ document.getElementById("goBtn").addEventListener("click", () => {
   location.href = `rankings.html?date=${dateInput.value}&item=${itemSelect.value}`;
 });
 
-// 快捷时点：每年 1/1 与 10/1（驿传季前后）
+// 快捷时点：数据库里最近的三大駅伝比赛日
 const quick = document.getElementById("quickDates");
-const span = store.rosterSpan;
-const quickDates = [];
-for (let y = (span.max || today.getFullYear()); y >= (span.min || 2015); y--) {
-  quickDates.push(`${y}-10-01`, `${y}-01-01`);
-}
-for (const d of quickDates.slice(0, 8)) {
-  const a = document.createElement("button");
-  a.className = "btn ghost";
-  a.textContent = d.slice(2, 7).replace("-", "/");
-  a.addEventListener("click", () => location.href = `rankings.html?date=${d}&item=${itemSelect.value}`);
-  quick.append(a);
+const MAJOR_RELAY_NAMES = new Set(["箱根駅伝", "全日本大学駅伝", "出雲駅伝"]);
+const MAJOR_RELAY_SHORT = { "箱根駅伝": "箱根", "全日本大学駅伝": "全日本", "出雲駅伝": "出雲" };
+const majorRounds = store.ekidenRounds
+  .filter((round) => MAJOR_RELAY_NAMES.has(store.ekidenItemById.get(round.ekidenItemId)?.name))
+  .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")))
+  .slice(0, 9);
+for (const round of majorRounds) {
+  const relayName = store.ekidenItemById.get(round.ekidenItemId)?.name || "駅伝";
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "btn ghost quick-date";
+  button.title = `${relayName} ${round.round}（${fmtDateFull(round.date)}）`;
+  button.innerHTML = `<b>${MAJOR_RELAY_SHORT[relayName] || relayName}</b>
+    <span>${String(round.date).slice(2).replaceAll("-", "/")} · ${round.round}</span>`;
+  button.addEventListener("click", () =>
+    location.href = `rankings.html?date=${round.date}&item=${itemSelect.value}`);
+  quick.append(button);
 }
 
 // --- 现役 TOP10（男女各自的项目） ---

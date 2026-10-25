@@ -130,6 +130,9 @@ select:focus,input:focus{outline:2px solid var(--accent-soft);outline-offset:-1p
 .btn.ghost.active{background:var(--accent-soft);color:var(--accent-ink);border-color:transparent}
 .btn.mini{padding:1px 8px;min-height:22px;font-size:12px;line-height:1.4;border-radius:6px}
 .quick-dates{display:flex;gap:6px;flex-wrap:wrap}
+.quick-date{display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:6px 10px;min-height:0;line-height:1.25}
+.quick-date b{font-size:12px}
+.quick-date span{font-size:10px;font-weight:500;color:var(--muted);white-space:nowrap}
 .switch{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:600;color:var(--ink-2);cursor:pointer}
 
 /* ---------- 表格 ---------- */
@@ -159,6 +162,8 @@ table.data tbody tr.row-hl td:first-child{box-shadow:inset 3px 0 0 var(--gold)}
 table.data tbody tr.row-hl:hover > td{background:#fbf0d8}
 table.data .time{font-family:var(--mono);font-variant-numeric:tabular-nums}
 table.data.compact th,table.data.compact td{padding:5px 10px}
+table.data tfoot td{background:var(--panel-2);border-top:1px solid var(--line);font-weight:700;color:var(--muted)}
+table.data tfoot .list-average-label{font-size:12px;letter-spacing:.03em}
 
 .badge{
   display:inline-block;padding:1px 7px;border-radius:999px;
@@ -325,6 +330,9 @@ table.data tbody tr:hover > td{background:var(--accent-soft)}
 .tabs button.active{color:var(--accent-ink);border-bottom-color:var(--accent)}
 .tabs.view-tabs{gap:24px;margin-bottom:16px}
 .tabs.view-tabs button{font-size:14px;padding:10px 3px}
+.tabs.subview-tabs{gap:4px 18px;flex-wrap:wrap;margin-top:-4px;margin-bottom:14px}
+.tabs.subview-tabs button{font-size:12px;padding:8px 2px}
+.tabs button:disabled{opacity:.35;cursor:not-allowed;border-bottom-color:transparent}
 .pill-row{display:flex;gap:8px;flex-wrap:wrap}
 .kbd{font-family:var(--mono);font-size:11px;background:var(--line-2);border:1px solid var(--line);border-radius:4px;padding:1px 5px}
 .demo-banner{
@@ -353,6 +361,33 @@ table.data thead th.sorted .sort-ind{
   padding:1px 6px;
 }
 tr:hover .time.pb-cell{background:#fbe4e1}
+/* 自己ベスト推移（学年別）：個人ページと選手別一覧で共用 */
+.pb-matrix{min-width:480px}
+.pb-matrix tbody th{text-align:left;font-weight:700;white-space:nowrap}
+.pb-matrix .pb-matrix-empty{color:var(--line)}
+.best-player-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start}
+.best-player-card{min-width:0;margin:0;overflow:hidden}
+.best-player-head{padding:14px 14px 0;align-items:flex-start}
+.best-player-head h3{margin:0 0 3px;font-size:15px}
+.best-player-head .hint{display:block;font-size:11px}
+.best-player-head > .badge{flex:0 0 auto}
+.best-player-card .pb-matrix-wrap{padding:0 8px 10px}
+@media (max-width:980px){.best-player-grid{grid-template-columns:1fr}}
+/* 個人ページ：学年別 PB と成績推移を並べる */
+.player-analytics-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start;margin-bottom:18px}
+.player-analytics-grid > .card{min-width:0;margin:0}
+@media (max-width:900px){.player-analytics-grid{grid-template-columns:1fr}}
+/* 携帯では PB の6列を画面内に収める */
+@media (max-width:680px){
+  .pb-matrix-wrap{overflow:visible}
+  .pb-matrix{min-width:0;width:100%;table-layout:fixed;font-size:10px}
+  .pb-matrix th,.pb-matrix td{padding:4px 1px;white-space:nowrap}
+  .pb-matrix th:first-child,.pb-matrix td:first-child{width:22%;font-size:10px}
+  .pb-matrix thead th{font-size:9.5px}
+  .pb-matrix .time{font-size:10px}
+  .pb-matrix .pb-cell{padding:0 1px;border-radius:4px}
+  .best-player-card .pb-matrix-wrap{padding:0 5px 8px}
+}
 
 /* 系列很多时的图例 */
 .legend.scroll{max-height:96px;overflow-y:auto;padding-right:4px}

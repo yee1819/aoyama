@@ -18,6 +18,21 @@
 
   <section class="controls">
     <div class="field">
+      <label>三大駅伝</label>
+      <select id="majorRelay">
+        <option value="">大会を選択</option>
+        <option value="箱根駅伝">箱根駅伝</option>
+        <option value="全日本大学駅伝">全日本大学駅伝</option>
+        <option value="出雲駅伝">出雲駅伝</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>届数</label>
+      <select id="majorEdition" disabled>
+        <option value="">大会を選択</option>
+      </select>
+    </div>
+    <div class="field">
       <label>基準日</label>
       <input type="date" id="date">
     </div>
@@ -162,6 +177,8 @@ const $perN = document.getElementById("perN");
 const $chartMode = document.getElementById("chartMode");
 const $topN = document.getElementById("topN");
 const $lineStyle = document.getElementById("lineStyle");
+const $majorRelay = document.getElementById("majorRelay");
+const $majorEdition = document.getElementById("majorEdition");
 
 const ITEMS_BY_SEX = {
   "男": ["five_5000m", "ten_10000m", "half_marathon", "three_3000m", "fifteen_1500m"],
@@ -189,6 +206,49 @@ fillItems();
 let selected = [];
 let currentRows = [];
 let period = mountPeriod(document.getElementById("chartPeriod"), (s) => { period = s; drawChart(); });
+
+// ---- 三大駅伝から試合日を選ぶ（大会 → 届数） ----
+const MAJOR_RELAY_NAMES = new Set(["箱根駅伝", "全日本大学駅伝", "出雲駅伝"]);
+const majorRelayRounds = () => store.ekidenRounds
+  .filter((round) => store.ekidenItemById.get(round.ekidenItemId)?.name === $majorRelay.value)
+  .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+
+function fillMajorEditions(selectedId = "") {
+  const rounds = majorRelayRounds();
+  $majorEdition.disabled = !rounds.length;
+  $majorEdition.innerHTML = rounds.length
+    ? `<option value="">回を選択</option>` + rounds.map((round) =>
+      `<option value="${round.id}">${esc(round.round)}（${fmtDate(round.date)}）</option>`).join("")
+    : `<option value="">大会を選択</option>`;
+  if (selectedId && rounds.some((round) => String(round.id) === String(selectedId))) {
+    $majorEdition.value = String(selectedId);
+  }
+}
+
+function syncMajorFromDate() {
+  const round = store.ekidenRounds.find((item) => {
+    const name = store.ekidenItemById.get(item.ekidenItemId)?.name;
+    return item.date === $date.value && MAJOR_RELAY_NAMES.has(name);
+  });
+  if (!round) {
+    $majorRelay.value = "";
+    $majorEdition.disabled = true;
+    $majorEdition.innerHTML = `<option value="">大会を選択</option>`;
+    return;
+  }
+  $majorRelay.value = store.ekidenItemById.get(round.ekidenItemId)?.name || "";
+  fillMajorEditions(round.id);
+}
+
+$majorRelay.addEventListener("change", () => fillMajorEditions());
+$majorEdition.addEventListener("change", () => {
+  const round = store.ekidenRounds.find((item) => String(item.id) === $majorEdition.value);
+  if (!round || !round.date) return;
+  $date.value = round.date;
+  selected = [];
+  render();
+});
+syncMajorFromDate();
 
 // ---- ハイライト（入学年 / 選手を複数） ----
 const $hlYear = document.getElementById("hlYear");
@@ -263,6 +323,7 @@ function shiftDate(days) {
   if (Number.isNaN(d.getTime())) return;
   d.setDate(d.getDate() + days);
   $date.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  syncMajorFromDate();
   render();
 }
 document.getElementById("prevDay").onclick = () => shiftDate(-1);
@@ -271,7 +332,7 @@ document.getElementById("prevYear").onclick = () => shiftDate(-365);
 document.getElementById("nextYear").onclick = () => shiftDate(365);
 document.getElementById("clearSel").onclick = () => { selected = []; render(); };
 
-$date.addEventListener("change", render);
+$date.addEventListener("change", () => { syncMajorFromDate(); render(); });
 $item.addEventListener("change", () => { selected = []; render(); });
 $scope.addEventListener("change", () => { selected = []; render(); });
 $include.addEventListener("change", () => { selected = []; render(); });

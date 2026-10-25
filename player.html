@@ -30,20 +30,30 @@
     <div id="pbs" style="padding:0 4px 8px"></div>
   </section>
 
-  <section class="card" style="margin-bottom:18px">
-    <div class="card-title">
-      <h3>記録の推移</h3>
-      <div class="pill-row">
-        <select id="chartItem" style="min-height:30px"></select>
-        <select id="lineStyle" style="min-height:30px">
-          <option value="line" selected>折れ線</option>
-          <option value="step">階段</option>
-        </select>
-        <span class="hint" id="chartSpan"></span>
+  <div class="player-analytics-grid">
+    <section class="card pad-0" id="pbGradeCard" hidden>
+      <div class="card-title" style="padding:16px 16px 0">
+        <h3>自己ベスト推移（学年別）</h3>
+        <span class="hint">高校 → 4年 ／ 赤枠＝自己ベスト</span>
       </div>
-    </div>
-    <div id="chart"></div>
-  </section>
+      <div id="pbGrades" style="padding:0 4px 8px"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-title">
+        <h3>記録の推移</h3>
+        <div class="pill-row">
+          <select id="chartItem" style="min-height:30px"></select>
+          <select id="lineStyle" style="min-height:30px">
+            <option value="line" selected>折れ線</option>
+            <option value="step">階段</option>
+          </select>
+          <span class="hint" id="chartSpan"></span>
+        </div>
+      </div>
+      <div id="chart"></div>
+    </section>
+  </div>
 
   <section class="card" style="margin-bottom:18px">
     <div class="card-title">
@@ -75,6 +85,7 @@ import {
 } from "./assets/ui.js";
 import { lineChart } from "./assets/charts.js";
 import { ekidenMatrixHtml } from "./assets/ekiden-matrix.js";
+import { pbMatrixHtml } from "./assets/pb-matrix.js";
 
 const store = await loadStore();
 mountLayout("player.html");
@@ -141,6 +152,8 @@ if (!s) {
     { label: "順位", cls: "mid", render: (r) => r.record.rank ? `<span class="badge ${r.record.rank === 1 ? "gold" : ""}">${r.record.rank}位</span>` : "—" },
   ], pbs, { empty: "記録がありません" });
   document.getElementById("pbs").firstChild.querySelector("table").classList.add("compact");
+  document.getElementById("pbGrades").innerHTML = pbMatrixHtml(store, s);
+  document.getElementById("pbGradeCard").hidden = false;
 
   // --- 三大駅伝 出場（学年 × 大会）---
   const major = ekidenMatrixHtml(store, id);

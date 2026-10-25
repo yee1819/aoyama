@@ -13,22 +13,25 @@
   <div class="breadcrumb"><a href="index.html">概況</a> / 自己ベスト</div>
   <section class="page-head">
     <h1>自己ベスト</h1>
-    <p>選手ごとの「高校 → 1年 → 2年 → 3年 → 4年」のベスト推移。入学年ごとのまとめ、学年ごとの世代対決、チーム平均の推移も見られます。</p>
+    <p>選手ごとの「高校 → 1年 → 2年 → 3年 → 4年」のベスト推移。従来の比較表示と、選手ごとに分けた学年別表を切り替えられます。</p>
   </section>
 
+  <div class="tabs view-tabs" id="layoutTabs">
+    <button type="button" data-layout="current" class="active">リスト</button>
+    <button type="button" data-layout="players">選手別（学年別）</button>
+  </div>
+
+  <div class="tabs subview-tabs" id="viewTabs">
+    <button type="button" data-view="list" class="active">一覧（種目別テーブル）</button>
+    <button type="button" data-view="year">入学年サマリー（世代）</button>
+    <button type="button" data-view="gen">学年別（世代対決）</button>
+    <button type="button" data-view="avg">全チーム平均の推移</button>
+  </div>
+
   <section class="controls">
-    <div class="field">
+    <div class="field" id="sexField">
       <label>性別</label>
       <div class="pill-row" id="sexTabs"></div>
-    </div>
-    <div class="field">
-      <label>表示</label>
-      <select id="view">
-        <option value="list">一覧（種目別テーブル）</option>
-        <option value="year">入学年サマリー（世代）</option>
-        <option value="gen">学年別（世代対決）</option>
-        <option value="avg">全チーム平均の推移</option>
-      </select>
     </div>
     <div class="field" id="itemField">
       <label>種目</label>
@@ -50,7 +53,7 @@
       <label>検索</label>
       <input type="search" id="q" placeholder="氏名で検索">
     </div>
-    <div class="field">
+    <div class="field" id="includeField">
       <label>成績包含</label>
       <select id="include">
         <option value="all">全部成績</option>
@@ -93,6 +96,8 @@
     </div>
   </section>
 
+  <div class="tabs grade-tabs" id="gradeTabs" hidden></div>
+
   <p class="hint" style="color:var(--muted);font-size:12px;margin:-4px 0 12px" id="count"></p>
   <div id="out"></div>
 </main>
@@ -104,6 +109,7 @@ import { loadStore, formatScore, ITEM_LABELS, currentAcademicYear, academicYear,
 import { mountLayout, setGeneratedAt, renderTable, gradeLabel, fmtDateCell, esc, qs } from "./assets/ui.js";
 import { lineChart } from "./assets/charts.js";
 import { t } from "./assets/i18n.js";
+import { pbMatrixHtml } from "./assets/pb-matrix.js";
 
 const store = await loadStore();
 mountLayout("best.html");
@@ -123,8 +129,10 @@ const ITEMS_BY_SEX = {
 const COLS = ["高校", "1年", "2年", "3年", "4年"];
 
 const $ = (id) => document.getElementById(id);
-const $sexTabs = $("sexTabs"), $view = $("view"), $scope = $("scope"), $year = $("year");
+const $sexTabs = $("sexTabs"), $scope = $("scope"), $year = $("year");
 const $q = $("q"), $include = $("include"), $item = $("item"), $out = $("out"), $count = $("count");
+const $layoutTabs = $("layoutTabs"), $viewTabs = $("viewTabs"), $includeField = $("includeField");
+const $gradeTabs = $("gradeTabs");
 const $genSort = $("genSort"), $avgScope = $("avgScope"), $avgItems = $("avgItems"), $avgPeriod = $("avgPeriod");
 const $avgBase = $("avgBase");
 const $itemField = $("itemField"), $scopeField = $("scopeField"), $yearField = $("yearField"), $qField = $("qField");
@@ -133,14 +141,17 @@ const $avgBaseField = $("avgBaseField");
 const $genSortField = $("genSortField");
 
 let sex = qs("sex") === "女" ? "女" : "男";
+let layout = qs("layout") === "players" ? "players" : "current";
+let viewMode = ["list", "year", "gen", "avg"].includes(qs("view")) ? qs("view") : "list";
+let gradeFilter = [1, 2, 3, 4].includes(Number(qs("grade"))) ? Number(qs("grade")) : 0;
 let sort = { key: null, dir: 1 };
 let genSortGrade = 4;
 let genDetail = null;          // 世代対決でクリックした「世代 × 学年」
 let avgItemsSel = new Set();
 
-$view.value = qs("view") || "list";
-$scope.value = ["all", "active"].includes(qs("scope")) ? qs("scope") : "player";
+$scope.value = ["all", "active", "player"].includes(qs("scope")) ? qs("scope") : "active";
 $include.value = qs("include") === "enrolled" ? "enrolled" : "all";
+$q.value = qs("q") || "";
 
 const mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
 /** 秒 → 「13:45.67」/「1:02:33.45」（小数第2位まで必ず出す） */
@@ -219,8 +230,53 @@ function renderSexTabs() {
   ).join("");
   $sexTabs.querySelectorAll("[data-sex]").forEach((b) =>
     b.addEventListener("click", () => {
-      sex = b.dataset.sex; sort = { key: null, dir: 1 }; avgItemsSel = new Set();
+      sex = b.dataset.sex; sort = { key: null, dir: 1 }; avgItemsSel = new Set(); gradeFilter = 0;
       renderSexTabs(); fillItems(); fillYears(); fillAvgItems(); render();
+    }));
+}
+
+function renderLayoutTabs() {
+  $layoutTabs.querySelectorAll("[data-layout]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.layout === layout);
+    button.setAttribute("aria-selected", button.dataset.layout === layout ? "true" : "false");
+  });
+}
+
+function renderViewTabs() {
+  $viewTabs.querySelectorAll("[data-view]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.view === viewMode);
+    button.setAttribute("aria-selected", button.dataset.view === viewMode ? "true" : "false");
+  });
+}
+
+function renderGradeTabs() {
+  const labels = [
+    { grade: 0, ja: "すべて", zh: "全部" },
+    { grade: 1, ja: "1年", zh: "大一" },
+    { grade: 2, ja: "2年", zh: "大二" },
+    { grade: 3, ja: "3年", zh: "大三" },
+    { grade: 4, ja: "4年", zh: "大四" },
+  ];
+  let availableGrades = null;
+  if ($scope.value === "active") {
+    let pool = scoped(store.studentsBySex(sex));
+    if ($year.value) pool = pool.filter((student) => student.enrollmentYear === $year.value);
+    availableGrades = new Set(pool.map((student) => store.gradeAt(student, todayISO)).filter(Boolean));
+  }
+  $gradeTabs.innerHTML = labels.map((item) =>
+    `<button type="button" data-grade="${item.grade}" class="${item.grade === gradeFilter ? "active" : ""}"
+      ${availableGrades && item.grade && !availableGrades.has(item.grade) ? "disabled" : ""}>
+      ${t(item.ja, item.zh)}
+    </button>`).join("");
+  $gradeTabs.querySelectorAll("[data-grade]").forEach((button) =>
+    button.addEventListener("click", () => {
+      gradeFilter = Number(button.dataset.grade);
+      const next = new URL(location.href);
+      if (gradeFilter) next.searchParams.set("grade", String(gradeFilter));
+      else next.searchParams.delete("grade");
+      history.replaceState(null, "", next);
+      fillYears();
+      render();
     }));
 }
 
@@ -237,10 +293,14 @@ function currentItem() {
 }
 
 function fillYears() {
-  const years = [...new Set(store.studentsBySex(sex).map((s) => s.enrollmentYear).filter(Boolean))].sort().reverse();
+  let pool = scoped(store.studentsBySex(sex));
+  if ($scope.value === "active" && gradeFilter) {
+    pool = pool.filter((student) => store.gradeAt(student, todayISO) === gradeFilter);
+  }
+  const years = [...new Set(pool.map((s) => s.enrollmentYear).filter(Boolean))].sort().reverse();
   const cur = $year.value;
   $year.innerHTML = `<option value="">すべて</option>` + years.map((y) => `<option value="${y}">${y}年</option>`).join("");
-  if (years.includes(cur)) $year.value = cur;
+  $year.value = years.includes(cur) ? cur : "";
 }
 
 function fillGenSort() {
@@ -267,6 +327,9 @@ function filtered() {
   if ($year.value) list = list.filter((s) => s.enrollmentYear === $year.value);
   const q = $q.value.trim().toLowerCase();
   if (q) list = list.filter((s) => (s.name + (s.kanaName || "")).toLowerCase().includes(q));
+  if ($scope.value === "active" && gradeFilter) {
+    list = list.filter((s) => store.gradeAt(s, todayISO) === gradeFilter);
+  }
   return list;
 }
 
@@ -353,6 +416,27 @@ function renderList(students) {
       sort = { key, dir: sort.key === key ? -sort.dir : 1 };
       render();
     }, sortState: sort });
+
+    if ($scope.value === "active") {
+      const gradeFoot = COLS.map((_, idx) => {
+        const vals = rows.map((r) => r.cells[idx]).filter(Boolean).map((r) => r.seconds);
+        return vals.length ? { avg: avgTop(vals, 0), n: vals.length } : null;
+      });
+      const bestVals = rows.map((r) => r.best).filter(Boolean).map((r) => r.seconds);
+      const bestAvg = bestVals.length ? avgTop(bestVals, 0) : null;
+      const foot = document.createElement("tfoot");
+      foot.innerHTML = `<tr>
+        <td></td>
+        <td colspan="3" class="list-average-label">${t("現役平均", "现役平均")}</td>
+        ${gradeFoot.map((value) => `<td class="num">${value
+          ? `<span class="time" title="${value.n}${t("名の平均", "人的平均")}">${fmtSec2(value.avg)}</span>`
+          : "—"}</td>`).join("")}
+        <td class="num">${bestAvg != null
+          ? `<span class="time" title="${bestVals.length}${t("名の平均", "人的平均")}">${fmtSec2(bestAvg)}</span>`
+          : "—"}</td>
+      </tr>`;
+      card.querySelector("table").append(foot);
+    }
   }
 }
 
@@ -629,9 +713,70 @@ function renderAvg() {
   $out.append(foot);
 }
 
+// ---------- ビュー 5：選手ごとの自己ベスト推移（学年別） ----------
+function renderPlayers(students) {
+  const list = students.slice().sort((a, b) =>
+    Number(b.enrollmentYear || 0) - Number(a.enrollmentYear || 0)
+    || a.name.localeCompare(b.name, "ja"));
+  $count.textContent = t(
+    `${list.length}名 ／ 高校から4年までの自己ベスト（赤枠＝各選手のベスト）`,
+    `${list.length}人 ／ 从高中到 4 年级的个人最好成绩（红框＝各人最好成绩）`,
+  );
+  if (!list.length) {
+    $out.innerHTML = `<div class="card empty">${t("該当する選手がいません", "没有符合条件的选手")}</div>`;
+    return;
+  }
+  const grid = document.createElement("div");
+  grid.className = "best-player-grid";
+  for (const student of list) {
+    const active = activeIds.has(student.id);
+    const status = active
+      ? gradeLabel(store.gradeAt(student, todayISO)) || t("在籍", "在籍")
+      : "OB";
+    const card = document.createElement("section");
+    card.className = "card pad-0 best-player-card";
+    card.innerHTML = `<div class="card-title best-player-head">
+        <div>
+          <h3><a href="player.html?id=${student.id}">${esc(student.name)}</a></h3>
+          <span class="hint">${student.enrollmentYear || "—"}${t("年入学", "年入学")} ／ ${status}
+            ${(student.sex || "男") === "女" ? `<span class="badge pink">${t("女子", "女子")}</span>` : ""}</span>
+        </div>
+        <span class="badge ${active ? "green" : "dim"}">${active ? t("現役", "现役") : "OB"}</span>
+      </div>
+      ${pbMatrixHtml(store, student)}`;
+    grid.append(card);
+  }
+  $out.append(grid);
+}
+
 function render() {
-  const view = $view.value;
+  renderLayoutTabs();
+  renderViewTabs();
+  const view = viewMode;
   if (view !== "gen") genDetail = null;
+  const showGrades = $scope.value === "active"
+    && (layout === "players" || (layout === "current" && view === "list"));
+  $gradeTabs.hidden = !showGrades;
+  if (showGrades) renderGradeTabs();
+
+  if (layout === "players") {
+    $viewTabs.hidden = true;
+    $itemField.hidden = true;
+    $includeField.hidden = true;
+    $avgItemsField.hidden = true;
+    $avgScopeField.hidden = true;
+    $avgPeriodField.hidden = true;
+    $avgBaseField.hidden = true;
+    $genSortField.hidden = true;
+    $scopeField.hidden = false;
+    $yearField.hidden = false;
+    $qField.hidden = false;
+    $out.textContent = "";
+    return renderPlayers(filtered());
+  }
+
+  $viewTabs.hidden = false;
+  $includeField.hidden = false;
   $itemField.hidden = view === "avg";
   $avgItemsField.hidden = view !== "avg";
   $avgScopeField.hidden = view !== "avg";
@@ -640,7 +785,7 @@ function render() {
   $genSortField.hidden = view !== "gen";
   // 「平均の取り方」は世代対決でも使う（既定は全員平均）
   if (view === "gen") $avgScopeField.hidden = false;
-  // 「対象」在所有视图里都有效（默认＝退部・転向を除く）
+  // 「対象」在所有视图里都有效（既定＝現役のみ）
   $scopeField.hidden = false;
   $yearField.hidden = !(view === "list" || view === "year");
   $qField.hidden = view !== "list";
@@ -675,8 +820,29 @@ function render() {
   if (!$out.children.length) $out.innerHTML = `<div class="card empty">記録がありません</div>`;
 }
 
-$view.addEventListener("change", () => { sort = { key: null, dir: 1 }; render(); });
-$scope.addEventListener("change", render);
+$viewTabs.querySelectorAll("[data-view]").forEach((button) =>
+  button.addEventListener("click", () => {
+    viewMode = button.dataset.view;
+    sort = { key: null, dir: 1 };
+    const next = new URL(location.href);
+    next.searchParams.set("view", viewMode);
+    history.replaceState(null, "", next);
+    render();
+  }));
+$layoutTabs.querySelectorAll("[data-layout]").forEach((button) =>
+  button.addEventListener("click", () => {
+    layout = button.dataset.layout === "players" ? "players" : "current";
+    sort = { key: null, dir: 1 };
+    const next = new URL(location.href);
+    next.searchParams.set("layout", layout);
+    history.replaceState(null, "", next);
+    render();
+  }));
+$scope.addEventListener("change", () => {
+  if ($scope.value !== "active") gradeFilter = 0;
+  fillYears();
+  render();
+});
 $item.addEventListener("change", render);
 [$year, $include].forEach((el) => el.addEventListener("change", () => { fillYears(); render(); }));
 $q.addEventListener("input", render);
