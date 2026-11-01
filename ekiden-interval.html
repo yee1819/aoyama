@@ -20,6 +20,7 @@
   <div class="tabs" id="modeTabs">
     <button type="button" data-mode="interval" class="active">区間別ランキング</button>
     <button type="button" data-mode="total">総合成績・比較</button>
+    <button type="button" data-mode="results">総合成績一覧</button>
     <button type="button" data-mode="members">出場者</button>
   </div>
 
@@ -29,9 +30,33 @@
       <label>大会</label>
       <div class="pill-row" id="relayTabs"></div>
     </div>
+    <div class="field" id="totalSortField" hidden>
+      <label>並び順</label>
+      <select id="totalSort">
+        <option value="date">年度（新しい順）</option>
+        <option value="total">総合成績（速い順）</option>
+      </select>
+    </div>
     <div class="field" style="margin-left:auto;align-self:flex-end">
       <label style="visibility:hidden">·</label>
       <span class="hint" id="seasonBadge" style="font-size:12px"></span>
+    </div>
+  </section>
+
+  <section class="controls" id="resultControls" hidden>
+    <div class="field">
+      <label>並び順</label>
+      <select id="resultSort">
+        <option value="date_desc">日付（新しい順）</option>
+        <option value="date_asc">日付（古い順）</option>
+        <option value="round_desc">届数（新しい順）</option>
+        <option value="round_asc">届数（古い順）</option>
+        <option value="total_asc">総合成績（速い順）</option>
+        <option value="total_desc">総合成績（遅い順）</option>
+      </select>
+    </div>
+    <div class="field" style="margin-left:auto;align-self:flex-end">
+      <span class="hint" id="resultCount"></span>
     </div>
   </section>
 
@@ -183,9 +208,13 @@ const RELAYS = [
 const qRelay = qs("relay");
 let relayIndex = Math.max(0, RELAYS.findIndex((r) => r.key === qRelay));
 // 表示モード：区間別 / 総合成績（全大会の総合記録と、大会をまたいだ比較）
-let mode = ["total", "members"].includes(qs("mode")) ? qs("mode") : "interval";
+let mode = ["total", "results", "members"].includes(qs("mode")) ? qs("mode") : "interval";
 // 総合成績モードの大会タブ：-1 = すべて（?relay= が来ていればその大会）
 let totalRelay = qRelay && RELAYS.some((r) => r.key === qRelay) ? relayIndex : -1;
+let totalSort = qs("sort") === "total" ? "total" : "date";
+document.getElementById("totalSort").value = totalSort;
+let resultSort = ["date_desc", "date_asc", "round_desc", "round_asc", "total_asc", "total_desc"].includes(qs("rsort"))
+  ? qs("rsort") : "date_desc";
 
 /**
  * 回ごとの特記事項。一覧では短いバッジ（マウスを乗せると全文）で表示する。
@@ -205,6 +234,10 @@ const $sortBy = document.getElementById("sortBy");
 const $scope = document.getElementById("scope");
 const $dist = document.getElementById("distFilter");
 const $out = document.getElementById("out");
+const $totalSort = document.getElementById("totalSort");
+const $totalSortField = document.getElementById("totalSortField");
+const $resultSort = document.getElementById("resultSort");
+$resultSort.value = resultSort;
 
 /** "21.3km" → 21.3 */
 const kmOf = (d) => {
@@ -263,7 +296,7 @@ function rangeNote(roundNos) {
 
 function renderTabs() {
   const el = document.getElementById("relayTabs");
-  if (mode === "total") {
+  if (mode === "total" || mode === "results") {
     el.innerHTML = `<button class="btn ghost ${totalRelay === -1 ? "active" : ""}" data-i="-1">${t("すべて", "全部")}</button>`
       + RELAYS.map((r, i) => `<button class="btn ghost ${i === totalRelay ? "active" : ""}" data-i="${i}">${r.key}</button>`).join("");
     el.querySelectorAll("[data-i]").forEach((b) =>
@@ -459,6 +492,13 @@ function renderLegend() {
     </div>`;
     return;
   }
+  if (mode === "results") {
+    el.innerHTML = `<div style="display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--muted)">
+      <span>${t("1大会1行で、青学の総合成績・平均ペース・団体順位・区間賞数を表示します", "每届一行显示青学综合成绩、平均配速、团体名次与区间奖数量")}</span>
+      <span>${t("日付・届数・総合成績で並べ替えられます", "可按日期、届数、综合成绩排序")}</span>
+    </div>`;
+    return;
+  }
   el.innerHTML = legendHtml;
   const sl = document.getElementById("seasonLabel");
   if (sl) sl.textContent = season.label;
@@ -476,18 +516,22 @@ function teamRankComparison(list) {
   const seasons = [...bySeason.entries()].sort((a, b) => b[0] - a[0]);
   const cell = (item) => {
     if (!item) return `<span class="team-rank-missing">—</span>`;
-    if (!item.teamRank) return `<span class="team-rank-missing">—</span>`;
-    return `<a class="team-rank-cell${item.teamRank === 1 ? " rank-first" : ""}"
+    const rank = item.teamRank ? `${item.teamRank}位` : "—";
+    const rankClass = item.teamRank === 1 ? " rank-first"
+      : item.teamRank === 2 ? " rank-second"
+        : item.teamRank === 3 ? " rank-third" : "";
+    return `<a class="team-rank-cell${rankClass}"
         href="race.html?type=ekiden&id=${item.round.id}"
-        title="${esc(item.relay.key)} ${esc(item.round.round)}：${item.teamRank}位">
-        <b>${item.teamRank}位</b><small>${esc(item.round.round)}</small>
+        title="${esc(item.relay.key)} ${esc(item.round.round)}：総合${rank} ／ 区間賞${item.awards}">
+        <span class="team-rank-line"><b>${rank}</b><small>${esc(item.round.round)}</small></span>
+        <span class="team-rank-awards${item.awards > 0 ? " has-awards" : ""}">${t("区間賞", "区间奖")} <b>${item.awards}</b></span>
       </a>`;
   };
   const card = document.createElement("section");
   card.className = "card pad-0 team-rank-card";
   card.innerHTML = `<div class="card-title" style="padding:16px 16px 0">
       <h3>${t("団体順位の年度別比較", "团体名次按年度对比")}</h3>
-      <span class="hint">${t("箱根・全日本・出雲の青学総合順位", "箱根・全日本・出云青学综合名次")}</span>
+      <span class="hint">${t("箱根・全日本・出雲の青学総合順位と区間賞数", "箱根・全日本・出云青学综合名次与区间奖数")}</span>
     </div>
     <div class="table-wrap team-rank-wrap">
       <table class="data team-rank-table">
@@ -504,8 +548,11 @@ function teamRankComparison(list) {
 /** 総合成績モード：全大会の総合記録一覧＋大会をまたいだ比較 */
 function renderTotals() {
   const relays = totalRelay < 0 ? RELAYS : [RELAYS[totalRelay]];
+  const useTotalSort = totalSort === "total" && totalRelay >= 0;
   const list = relays.flatMap((r) => relayTotals(r))
-    .sort((a, b) => String(b.round.date).localeCompare(String(a.round.date)));
+    .sort((a, b) => useTotalSort
+      ? a.total - b.total
+      : String(b.round.date).localeCompare(String(a.round.date)));
   list.forEach((x) => { x.__cls = x.current ? "row-current" : ""; });
   $out.textContent = "";
 
@@ -576,15 +623,67 @@ function renderTotals() {
   }
 }
 
+/** 総合成績一覧：三大駅伝を1大会1行で並べる */
+function renderResults() {
+  const relays = totalRelay < 0 ? RELAYS : [RELAYS[totalRelay]];
+  const roundNoOf = (item) => Number((String(item.round.round).match(/\d+/) || [0])[0]);
+  const list = relays.flatMap((relay) => relayTotals(relay));
+  list.sort((a, b) => {
+    if (resultSort === "date_asc") return String(a.round.date).localeCompare(String(b.round.date));
+    if (resultSort === "round_desc") return roundNoOf(b) - roundNoOf(a) || String(b.round.date).localeCompare(String(a.round.date));
+    if (resultSort === "round_asc") return roundNoOf(a) - roundNoOf(b) || String(a.round.date).localeCompare(String(b.round.date));
+    if (resultSort === "total_asc") return a.total - b.total;
+    if (resultSort === "total_desc") return b.total - a.total;
+    return String(b.round.date).localeCompare(String(a.round.date));
+  });
+  list.forEach((item) => { item.__cls = item.current ? "row-current" : ""; });
+  const crossDistanceNote = totalRelay < 0 && resultSort.startsWith("total_")
+    ? t(" ／ 距離の異なる大会をまたぐ総合成績順は参考値", " ／ 跨距离大会的综合成绩排序仅供参考")
+    : "";
+  document.getElementById("resultCount").textContent = `${list.length}${t("件", "条")}${crossDistanceNote}`;
+  $out.textContent = "";
+
+  const card = document.createElement("section");
+  card.className = "card pad-0";
+  card.innerHTML = `<div class="card-title" style="padding:16px 16px 0">
+      <h3>${t("三大駅伝 総合成績一覧", "三大驿传综合成绩列表")}</h3>
+      <span class="hint">${t("総合成績・ペース・団体順位・区間賞を1大会1行で表示", "每届一行显示综合成绩、配速、团体名次与区间奖")}</span>
+    </div>
+    <div class="body" style="padding:0 4px 8px"></div>`;
+  $out.append(card);
+
+  renderTable(card.querySelector(".body"), [
+    { label: "日付", cls: "mid", render: (item) => fmtDate(item.round.date) },
+    { label: "大会", cls: "name", render: (item) =>
+      `<a href="race.html?type=ekiden&id=${item.round.id}">${esc(item.relay.key)} ${esc(item.round.round)}</a>` },
+    { label: "総合成績", cls: "num", render: (item) => `<span class="time"><b>${formatScore(item.total, false)}</b></span>` },
+    { label: "ペース", cls: "num", render: (item) =>
+      item.pace ? `<span class="time" style="color:var(--muted)">${fmtPace(item.pace)}/km</span>` : "—" },
+    { label: "団体順位", cls: "mid", render: (item) => {
+      if (!item.teamRank) return "—";
+      const cls = item.teamRank === 1 ? "gold" : item.teamRank === 2 ? "silver" : item.teamRank === 3 ? "bronze" : "";
+      return `<span class="badge ${cls}">${item.teamRank}位</span>`;
+    } },
+    { label: "区間賞", cls: "mid", render: (item) => item.awards
+      ? `<span class="result-awards">${item.awards}${t("個", "个")}</span>`
+      : `<span style="color:var(--line)">0</span>` },
+    { label: "詳細", cls: "mid", render: (item) =>
+      `<a class="btn ghost mini" href="race.html?type=ekiden&id=${item.round.id}">${t("詳細", "详情")} →</a>` },
+  ], list, { empty: t("記録がありません", "没有记录") });
+}
+
 function render() {
   renderModeTabs();
   const isTotal = mode === "total";
+  const isResults = mode === "results";
   const isMembers = mode === "members";
-  document.getElementById("detailControls").hidden = isTotal || isMembers;
-  document.getElementById("sortField").hidden = isTotal || isMembers;
-  document.getElementById("distField").hidden = isTotal || isMembers;
-  document.getElementById("scopeField").hidden = isTotal || isMembers;
+  document.getElementById("detailControls").hidden = isTotal || isResults || isMembers;
+  document.getElementById("sortField").hidden = isTotal || isResults || isMembers;
+  document.getElementById("distField").hidden = isTotal || isResults || isMembers;
+  document.getElementById("scopeField").hidden = isTotal || isResults || isMembers;
   document.getElementById("relayControls").hidden = isMembers;
+  $totalSortField.hidden = !(isTotal && totalRelay >= 0);
+  document.getElementById("resultControls").hidden = !isResults;
   document.getElementById("memberControls").hidden = !isMembers;
   document.getElementById("memberLegend").hidden = !isMembers;
   document.getElementById("out").hidden = isMembers;
@@ -592,12 +691,17 @@ function render() {
   document.getElementById("legendCard").hidden = isMembers;
   document.getElementById("pageTitle").textContent = isTotal
     ? t("三大駅伝 総合成績・比較", "三大驿传 综合成绩・对比")
+    : isResults
+      ? t("三大駅伝 総合成績一覧", "三大驿传综合成绩列表")
     : isMembers
       ? t("三大駅伝 出場者", "三大驿传出场者")
       : t("三大駅伝", "三大驿传");
   document.getElementById("pageLead").textContent = isTotal
     ? t("箱根・全日本・出雲の各大会を新しい年度から並べ、総合成績と全区間の記録・区間順位をまとめて見られます。平均ペースで大会をまたいだ比較もできます。",
         "把箱根・全日本・出云的各届按年度从新到旧排列，同时看综合成绩和全部区间的成绩、区间排名。也能用平均配速跨大会比较。")
+    : isResults
+      ? t("箱根・全日本・出雲の総合成績を1大会1行で一覧表示。日付・届数・総合成績で並べ替えられます。",
+          "以每届一行列出箱根・全日本・出云的综合成绩，可按日期、届数、综合成绩排序。")
     : isMembers
       ? t("箱根・全日本・出雲に一度でも出場した選手を、学年ごとにまとめました。区間1〜3位は色付き、区間新記録は赤字です。",
           "把至少参加过一次箱根・全日本・出云的选手按学年汇总。区间前 3 名有底色，区间新纪录用红字。")
@@ -606,6 +710,7 @@ function render() {
   renderLegend();
   renderTabs();
   if (isTotal) return renderTotals();
+  if (isResults) return renderResults();
   if (isMembers) return renderMembers();
   const relay = RELAYS[relayIndex];
   let rows = recordsFor(relay);
@@ -717,6 +822,14 @@ function render() {
 }
 
 $sortBy.addEventListener("change", render);
+$totalSort.addEventListener("change", () => {
+  totalSort = $totalSort.value === "total" ? "total" : "date";
+  render();
+});
+$resultSort.addEventListener("change", () => {
+  resultSort = $resultSort.value;
+  render();
+});
 $scope.addEventListener("change", render);
 $dist.addEventListener("change", render);
 ["mScope", "mYear", "mSort"].forEach((id) =>

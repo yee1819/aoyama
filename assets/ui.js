@@ -134,7 +134,7 @@ export function studentLink(s, text) {
 export function fmtDate(d, withDay = null) {
   if (!d) return "—";
   const [y, m, day] = String(d).split("-");
-  const show = withDay == null ? !!(day && day !== "01") : withDay;
+  const show = withDay == null ? !!day : withDay;
   return `${y}/${m}${show && day ? "/" + day : ""}`;
 }
 
@@ -156,10 +156,7 @@ export function fmtDateCell(record, student) {
     return `<span class="badge" title="${real ? esc(real) : "高校時代"}">高校</span>`;
   }
   const g = gradeAtDate(student, record.date);
-  const day = String(record.date || "").slice(8, 10);
-  // 大会の記録は「6月1日」のような実日付なので、日を省かない
-  const exact = record.competitionId != null || (!!day && day !== "01");
-  return fmtDate(record.date, exact)
+  return fmtDate(record.date, true)
     + (g ? `<span class="grade-note">（${g}年）</span>` : "");
 }
 
