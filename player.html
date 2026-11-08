@@ -104,6 +104,11 @@ if (!s) {
   const todayISO = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
   const grade = store.gradeAt(s, todayISO);
   const posLabel = { main: "主将", sub_main: "副主将", leader: "寮長" }[s.position];
+  const clubStatus = s.status === "withdraw"
+    ? `退部${s.leftDate ? `（${fmtDate(s.leftDate)}）` : ""}`
+    : s.status === "staff"
+      ? `スタッフ${s.leftDate ? `（${fmtDate(s.leftDate)}）` : ""}`
+      : null;
   const enrollment = [
     ["入学時5000m", s.enrollment5000m], ["入学3000m", s.enrollment3000m],
     ["入学10000m", s.enrollment10000m], ["入学1500m", s.enrollment1500m],
@@ -116,13 +121,14 @@ if (!s) {
         <h1 style="font-size:26px">${esc(s.name)}
           ${(s.sex || "男") === "女" ? `<span class="badge pink" style="vertical-align:6px">女子</span>` : ""}
           ${posLabel ? `<span class="badge green" style="vertical-align:6px">${posLabel}</span>` : ""}
+          ${clubStatus ? `<span class="badge dim" style="vertical-align:6px">${s.status === "withdraw" ? "退部" : "スタッフ"}</span>` : ""}
         </h1>
         <p style="color:var(--muted);margin:4px 0 12px">
           ${esc(s.kanaName || "")} ${s.englishName ? `<span style="opacity:.7">/ ${esc(s.englishName)}</span>` : ""}
         </p>
         <dl>
           <dt>入学 / 卒業</dt><dd>${s.enrollmentYear || "—"} 年${s.graduationYear ? " / " + s.graduationYear + " 年" : ""}</dd>
-          <dt>学年</dt><dd>${gradeLabel(grade) || (s.status === "withdraw" ? "退部" : "—")}</dd>
+          <dt>学年</dt><dd>${clubStatus || gradeLabel(grade) || "—"}</dd>
           <dt>出身高校</dt><dd>${esc(store.schoolName(s.highSchoolId) || "—")}</dd>
           <dt>学部・専攻</dt><dd>${esc(s.major || "—")}</dd>
           ${s.position && s.position !== "none" ? `<dt>役職</dt><dd>${posLabel || "—"}${s.appointmentYear ? `（${s.appointmentYear}年）` : ""}</dd>` : ""}
